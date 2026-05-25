@@ -1,0 +1,23 @@
+# Modelos YOLO (archivos grandes)
+*.pt
+
+# Videos
+videos/
+
+# Salidas del diagnóstico OCR
+diag_out/
+diag_ocr.txt
+
+# Claude Code memory
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Editor
+.vscode/
+*.swp
