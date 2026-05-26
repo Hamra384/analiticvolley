@@ -11,6 +11,9 @@ diag_ocr.txt
 # Datos de entrenamiento (generados localmente)
 training_data/
 
+# Datos SVHN descargados automáticamente (archivos grandes)
+svhn_data/
+
 # Claude Code memory
 .claude/
 
