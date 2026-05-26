@@ -15,10 +15,11 @@ from ultralytics import YOLO
 from collections import defaultdict
 
 # ── Config ─────────────────────────────────────────────────────────────────
-MIN_CONF     = 0.85  # confianza mínima para aceptar etiqueta automática
-SKIP         = 30    # procesar 1 de cada N frames (~1 frame/seg a 30fps)
-MAX_MINUTOS  = 15    # procesar solo los primeros N minutos por video
-META_X_NUM   = 150   # parar cuando todos los números vistos tengan >= este valor
+MIN_CONF     = 0.87  # confianza mínima para aceptar etiqueta automática
+SKIP         = 15    # procesar 1 de cada N frames (~2 frames/seg a 30fps)
+MAX_MINUTOS  = 40    # procesar los primeros N minutos por video
+META_X_NUM   = 200   # parar cuando todos los números vistos tengan >= este valor
+MAX_NUM      = 30    # descartar números mayores a este (dorsales imposibles en vóley)
 OUTPUT_DIR   = 'training_data'
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ for video_path in videos:
             texto = mejor[1].strip()
             conf  = mejor[2]
 
-            if texto.isdigit() and 1 <= len(texto) <= 2 and conf >= MIN_CONF:
+            if texto.isdigit() and 1 <= len(texto) <= 2 and conf >= MIN_CONF and int(texto) <= MAX_NUM:
                 carpeta = os.path.join(OUTPUT_DIR, texto)
                 os.makedirs(carpeta, exist_ok=True)
                 idx = conteo[texto]

@@ -8,6 +8,9 @@ videos/
 diag_out/
 diag_ocr.txt
 
+# Datos de entrenamiento (generados localmente)
+training_data/
+
 # Claude Code memory
 .claude/
 
