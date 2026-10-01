@@ -1,21 +1,37 @@
-# Modelos YOLO (archivos grandes)
-*.pt
-
-# Videos
+# ── Medios y datos: NUNCA en el repo (repo público). Control adicional: scripts/check_no_media.py + hook guard_bash
 videos/
-
-# Salidas del diagnóstico OCR
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.m4v
+data/
+training_data/
+svhn_data/
 diag_out/
 diag_ocr.txt
 
-# Datos de entrenamiento (generados localmente)
-training_data/
+# Pesos de modelos descargables (los .onnx versionados viven en models/, ver ADR-0003)
+*.pt
 
-# Datos SVHN descargados automáticamente (archivos grandes)
-svhn_data/
+# Configuración local (ruta de datos, etc.)
+configs/local.yaml
+.env
+.env.*
 
-# Claude Code memory
-.claude/
+# Claude Code: se versiona el harness (.claude/settings.json, hooks, agents, skills); lo local no
+.claude/settings.local.json
+.claude/memory/
+.harness/
+
+# Salidas
+outputs/
+reports/eval/*.mp4
+coverage.xml
+junit.xml
+.coverage
+htmlcov/
 
 # Python
 __pycache__/
@@ -23,6 +39,9 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # Editor
 .vscode/
