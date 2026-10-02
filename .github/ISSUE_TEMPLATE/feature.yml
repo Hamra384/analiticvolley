@@ -1,0 +1,40 @@
+name: Funcionalidad
+description: Funcionalidad derivada de una spec aprobada
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: objetivo
+    attributes: {label: Objetivo}
+    validations: {required: true}
+  - type: input
+    id: spec
+    attributes: {label: Spec, placeholder: docs/specs/NNN-slug.md}
+    validations: {required: true}
+  - type: input
+    id: adr
+    attributes: {label: ADR relacionados, placeholder: "ADR-NNNN | ninguno"}
+  - type: textarea
+    id: tecnica
+    attributes: {label: Descripción técnica}
+  - type: textarea
+    id: ac
+    attributes:
+      label: Criterios de aceptación
+      value: "- [ ] AC-1: dado …, cuando …, entonces …"
+    validations: {required: true}
+  - type: textarea
+    id: tareas
+    attributes: {label: Tareas de implementación y de testing}
+  - type: textarea
+    id: deps
+    attributes: {label: Dependencias y riesgos}
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      value: |
+        - [ ] Tests de cada AC en verde en CI (RED observado antes)
+        - [ ] check_tests_ran OK (sin skips sin Issue)
+        - [ ] Reviewer sin hallazgos bloqueantes
+        - [ ] Documentación actualizada
+        - [ ] PR con "Closes #N" y spec

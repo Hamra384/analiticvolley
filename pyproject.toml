@@ -71,7 +71,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src"]
+files = ["src", "scripts", ".claude/hooks"]
+explicit_package_bases = true
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
