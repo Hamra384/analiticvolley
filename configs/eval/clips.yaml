@@ -79,6 +79,6 @@ clips:
     video: jpn_kor_2026
     start: "9:14"
     duration_s: 20
-    scenarios: [ball_fast, overlap]
-    verified: false
-    notes: Seleccionado solo por escaneo automático; falta verificación visual.
+    scenarios: [ball_fast, overlap, libero]
+    verified: true
+    notes: Rally largo sin cortes (marcador fijo 16-19); pelota alta visible; líbero blanco #1 en el equipo rojo.

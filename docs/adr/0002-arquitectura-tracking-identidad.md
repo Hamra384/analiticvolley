@@ -20,7 +20,8 @@ Pipeline en capas con un `IdentityManager` propio, puro Python y testeable sin v
 
 ```
 VideoSource → ShotDetector (cortes) → PlayerDetector / BallDetector
-  → CourtMask (por color, por video) → Tracker (tracklets cortos, con compensación de movimiento de cámara)
+  → CourtMask (por color, por video) → Tracker (tracklets cortos; ByteTrack, ver SPIKE-001)
+  → TrackletSplitter (corta tracklets con discontinuidad de apariencia)
   → Appearance (embedding Re-ID + color) | TeamClassifier (colores de equipo y líbero por config + lado de red)
   | JerseyReader (metadata, nunca clave de identidad)
   → IdentityManager (tracklet → PlayerIdentity; máquina de estados; Re-ID; sustituciones)
@@ -34,8 +35,13 @@ VideoSource → ShotDetector (cortes) → PlayerDetector / BallDetector
 - Un tracklet nuevo **nunca** crea una identidad automáticamente: solo si ninguna identidad
   `OCCLUDED`/`LOST` es compatible y hay evidencia de jugador nuevo.
 - Se procesa por tramo (entre cortes). La identidad a través de cortes es métrica secundaria, no criterio de éxito.
-- Tracker base: BoT-SORT (incluye compensación de movimiento de cámara). Se compara contra ByteTrack y DeepOCSORT
-  en el spike de S2; si pierde, este ADR se actualiza.
+- ~~Tracker base: BoT-SORT (incluye compensación de movimiento de cámara).~~ **Actualizado 2026-10-02 por
+  SPIKE-001** (`docs/spikes/001-tracker.md`): tracker base **ByteTrack**. En auditoría ciega tuvo menos
+  intercambios de identidad (15 vs. 21–26 de BoT-SORT) y es ~10× más rápido; DeepOCSORT quedó descartado por
+  velocidad (3 FPS). Se revalida con IDF1 sobre ground truth en S6.
+- **Partición de tracklets (agregado por SPIKE-001):** todos los trackers evaluados intercambian ~1 vez por track
+  largo en 20 s. El `IdentityManager` parte un tracklet cuando su apariencia cambia de forma sostenida y asocia
+  cada fragmento por separado.
 - Se descarta la homografía fija por video (la cámara se mueve). La cancha se delimita por color.
 
 ## Alternativas evaluadas
