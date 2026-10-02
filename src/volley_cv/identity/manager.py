@@ -65,6 +65,7 @@ class _Tracklet:
     team_mismatch: int = 0
     recent: list[Vec] = field(default_factory=list)
     recent_in_court: list[bool] = field(default_factory=list)  # in_court de cada observación de `recent`
+    recent_libero: list[bool] = field(default_factory=list)  # rol de cada observación de `recent` (SPEC-004)
     # cada lectura recuerda a qué identidad se le sumó (None = a ninguna), para no contarla dos veces
     reads: list[tuple[JerseyRead, str | None, int]] = field(
         default_factory=list
@@ -153,7 +154,6 @@ class IdentityManager:
         self._split_count: Counter[int] = Counter()
         self._identities: dict[str, _Identity] = {}
         self._next_number: Counter[Team] = Counter()
-        self._next_sub: Counter[Team] = Counter()  # suplentes desde 08 (SPEC-004 RF-6)
         self._partners: dict[str, set[str]] = {}
         self._since_sep: dict[str, int] = {}
         self._episode_start: dict[str, int] = {}  # frame en que la identidad entró a su superposición actual
@@ -187,15 +187,24 @@ class IdentityManager:
         # tracklets con identidad: actualizan su identidad. Si el equipo observado contradice al de la
         # identidad (intercambio del tracker entre equipos) no se emite ni se actualiza.
         contradicted: set[int] = set()
-        contradicted |= self._over_cap(observed, frame)
+        for t, o, i in observed:
+            if t.player is None:
+                continue
+            idn = self._identities[t.player]
+            if not self._same_role(t, idn) and t.obs_count >= cfg.confirm_frames:
+                # SPEC-004 RN-1 (revisión S5c H2): el rol sostenido del tracklet contradice al de la identidad
+                # (el tracker pasó el track del líbero a uno de campo o al revés): se desvincula
+                if idn.tracklet == t.key:
+                    idn.tracklet = None
+                t.player = None
+                continue
+            if o.team is not None and o.team != idn.team:
+                contradicted.add(i)
+        contradicted |= self._over_cap([x for x in observed if x[2] not in contradicted], frame)
         for t, o, i in observed:
             if t.player is None or i in contradicted:
                 continue
-            idn = self._identities[t.player]
-            if o.team is not None and o.team != idn.team:
-                contradicted.add(i)
-                continue
-            self._update_identity(idn, t, o, embs[i], i in overlapping, frame)
+            self._update_identity(self._identities[t.player], t, o, embs[i], i in overlapping, frame)
 
         # tracklets sin identidad: asociación o creación
         unassigned = [(t, o, i) for t, o, i in observed if t.player is None and t.team is not None]
@@ -310,10 +319,12 @@ class IdentityManager:
                 t.far_count += 1
                 t.recent.append(emb)
                 t.recent_in_court.append(o.in_court)
+                t.recent_libero.append(o.libero)
             else:
                 t.far_count = 0
                 t.recent.clear()
                 t.recent_in_court.clear()
+                t.recent_libero.clear()
             team = t.team
             # RF-5b: los frames sin equipo no reinician el contador de contradicciones
             if o.team is not None and team is not None:
@@ -388,6 +399,7 @@ class IdentityManager:
         new.obs_count = len(recent)
         # H2 (revisión S4.1): el fragmento cuenta solo su propia evidencia de cancha, no la de otra persona
         new.in_court_count = sum(old.recent_in_court)
+        new.libero_count = sum(old.recent_libero)  # revisión S5c H2
         if old.last_team is not None:
             new.team_votes[old.last_team] += max(len(recent), old.team_mismatch)
         return new
@@ -478,6 +490,8 @@ class IdentityManager:
                     continue
                 if t.last_team is not None and t.last_team != idn.team:
                     continue
+                if not self._same_role(t, idn):
+                    continue  # revisión S5c H2: la corrección de intercambios no cruza roles
                 if g is not None and t.last_emb is not None:
                     cost[a, b] = _cos_dist(t.last_emb, g)
                 elif own:
@@ -500,6 +514,7 @@ class IdentityManager:
             self._move_reads(t, pid, since=episode_start)
             if t.last_emb is not None and any(t is free[p][0] for p in fixed):
                 t.ref, t.far_count, t.recent, t.recent_in_court = t.last_emb, 0, [], []
+                t.recent_libero = []
 
     # ── identidades ──────────────────────────────────────────────────────────────
     def _update_identity(
@@ -588,6 +603,7 @@ class IdentityManager:
                     continue  # SPEC-004 RF-3: el cupo visible también vale para la Re-ID
                 continuous = frame - idn.last_frame <= 1 and not idn.after_cut  # cambio de track sin hueco
                 self._link(t, idn)
+                idn.retired = False  # revisión S5c B3
                 self._update_identity(idn, t, o, embs[i], False, frame)
                 frame_state[idn.pid] = PlayerState.TRACKED if continuous else PlayerState.REIDENTIFIED
                 matched.add(a)
@@ -638,18 +654,32 @@ class IdentityManager:
     ) -> None:
         """RF-4…RF-6: con el cupo completo, el tracklet toma una identidad ausente de su equipo y rol."""
         cfg = self.config
+        busy = {t.player for t in self._tracklets.values() if t.player and t.last_frame == frame}
         for team in Team:
             for libero in (False, True):
                 group = [r for r in ready if r[0].team == team and r[0].libero == libero]
-                if not group:
-                    continue
                 room = cfg.roster_size - self._visible(team, frame)
-                free = [
+                absent = [
                     i
                     for i in sorted(self._identities.values(), key=lambda x: x.pid)
-                    if i.team == team and i.libero == libero and not i.retired and i.last_frame < frame
+                    if i.team == team and i.libero == libero and i.pid not in busy and i.last_frame < frame
                 ]
-                if room <= 0 or not free:
+                # revisión S5c M1: un titular retirado vuelve con su número -> recupera su identidad
+                for r in list(group):
+                    number = r[0].established_number(cfg.jersey_min_conf, cfg.jersey_min_reads)
+                    back = next(
+                        (i for i in absent if i.retired and i.jersey is not None and i.jersey[0] == number),
+                        None,
+                    )
+                    if back is None or room <= 0:
+                        continue
+                    back.retired = False
+                    self._take(back, r, embs, frame, frame_state)
+                    group.remove(r)
+                    absent.remove(back)
+                    room -= 1
+                free = [i for i in absent if not i.retired]
+                if not group or room <= 0 or not free:
                     continue
                 cost = np.array(
                     [[self._forced_cost(t, idn, frame, True) for idn in free] for t, _, _ in group]
@@ -659,15 +689,24 @@ class IdentityManager:
                     if room <= 0:
                         break
                     t, o, i = group[a]
-                    if cost[a, b] >= INF:
-                        if self._substitute(team, t, o, embs[i], free, frame, frame_state):
-                            room -= 1
-                        continue
-                    idn = free[b]
-                    self._link(t, idn)
-                    self._update_identity(idn, t, o, embs[i], False, frame)
-                    frame_state[idn.pid] = PlayerState.REIDENTIFIED
-                    room -= 1
+                    if cost[a, b] < INF:
+                        self._take(free[b], group[a], embs, frame, frame_state)
+                        room -= 1
+                    elif self._substitute(team, t, o, embs[i], free[b], frame, frame_state):
+                        room -= 1  # revisión S5c M2: sale la identidad de la columna asignada
+
+    def _take(
+        self,
+        idn: _Identity,
+        r: tuple[_Tracklet, Observation, int],
+        embs: list[Vec | None],
+        frame: int,
+        frame_state: dict[str, PlayerState],
+    ) -> None:
+        t, o, i = r
+        self._link(t, idn)
+        self._update_identity(idn, t, o, embs[i], False, frame)
+        frame_state[idn.pid] = PlayerState.REIDENTIFIED
 
     def _forced_cost(self, t: _Tracklet, idn: _Identity, frame: int, veto: bool) -> float:
         cfg = self.config
@@ -699,20 +738,18 @@ class IdentityManager:
         t: _Tracklet,
         o: Observation,
         emb: Vec | None,
-        free: list[_Identity],
+        outgoing: _Identity,
         frame: int,
         frame_state: dict[str, PlayerState],
     ) -> bool:
         """RF-6: el número del tracklet no es de nadie del equipo: suplente (08+); retira a quien salió."""
         cfg = self.config
         number = t.established_number(cfg.jersey_min_conf, cfg.jersey_min_reads)
-        if number is None or t.libero:
+        if number is None or t.libero or outgoing.retired:
             return False
         taken = {i.jersey[0] for i in self._identities.values() if i.team == team and i.jersey is not None}
-        candidates = [i for i in free if not i.retired]
-        if number in taken or not candidates:
+        if number in taken:
             return False
-        outgoing = min(candidates, key=lambda i: self._forced_cost(t, i, frame, False))
         outgoing.retired = True
         idn = self._create(team, t, o, emb, frame, substitute=True)
         frame_state[idn.pid] = PlayerState.DETECTED
@@ -725,14 +762,20 @@ class IdentityManager:
         self, team: Team, t: _Tracklet, o: Observation, emb: Vec | None, frame: int, substitute: bool = False
     ) -> _Identity:
         libero = self.config.closed_roster and t.libero
-        if libero:
-            n = 7  # SPEC-004 RN-1
-        elif substitute:
-            self._next_sub[team] += 1
-            n = 7 + self._next_sub[team]
-        else:
+        used = {int(p[-2:]) for p, i in self._identities.items() if i.team == team}
+        if not self.config.closed_roster:
             self._next_number[team] += 1
             n = self._next_number[team]
+        elif libero:
+            n = 7  # SPEC-004 RN-1
+        else:
+            # revisión S5c H1: el menor libre (una fusión puede liberar un número); nunca el 07
+            field_free = [k for k in range(1, self.config.field_slots + 1) if k not in used and k != 7]
+            n = (
+                field_free[0]
+                if field_free and not substitute
+                else next(k for k in range(8, 100) if k not in used)
+            )
         pid = f"TEAM_{team}_PLAYER_{n:02d}"
         idn = _Identity(
             pid=pid,
@@ -746,6 +789,7 @@ class IdentityManager:
         )
         if t.ref is not None:
             idn.gallery.append(t.ref)
+        assert pid not in self._identities, f"identidad duplicada: {pid}"
         self._identities[pid] = idn
         self._link(t, idn)
         self._update_identity(idn, t, o, emb, False, frame)
@@ -793,7 +837,8 @@ class IdentityManager:
                 ordered = sorted(pids, key=lambda p: (self._identities[p].created, p))
                 target = ordered[0]
                 for other in ordered[1:]:
-                    if not self._identities[other].coexisted_with(self._identities[target]):
+                    src, dst = self._identities[other], self._identities[target]
+                    if src.libero == dst.libero and not src.coexisted_with(dst):
                         self._merge(other, target, frame, frame_state)
                         cands.pop(other, None)
                         cands[target] = self._identities[target].votes.candidate(self.config)

@@ -139,7 +139,8 @@ def test_ac5_substitute_with_new_number_gets_08_and_outgoing_is_retired() -> Non
     # vuelve alguien sin número legible: el 06 está retirado, no se le reasigna por descarte
     for f in range(90, 120):
         out = mgr.update(f, [*field(NUMS, skip={5}, f=f), obs(15, XS[5], emb(13))])
-    assert by_track(out).get("track_15") != out_pid
+    assert by_track(out)["track_15"] == "TEAM_A_PLAYER_08"  # por descarte: el único libre no retirado
+    assert mgr._identities[out_pid].retired
 
 
 def test_ac6_number_vetoes_elimination() -> None:
@@ -209,3 +210,104 @@ def test_ac4_reidentification_does_not_exceed_six() -> None:
     for f in range(85, 110):  # vuelve el líbero con un track nuevo mientras el 6.º sigue visible
         out = mgr.update(f, [*field(f=f), obs(77, 900.0, emb(10), libero=True, y=300.0)])
         assert sum(p.team_id == "TEAM_A" for p in out.players) <= CFG.roster_size
+
+
+# ── revisión independiente S5c ──────────────────────────────────────────────
+
+
+def _assert_unique(out: FrameOutput) -> None:
+    ids = [p.player_id for p in out.players]
+    assert len(ids) == len(set(ids)), ids
+
+
+def test_review_h1_merge_before_full_roster_never_produces_a_field_07() -> None:
+    mgr = IdentityManager()
+    f = 0
+    for _ in range(10):
+        mgr.update(f, [obs(1, 150.0, emb(0), number=3)])
+        f += 1
+    for _ in range(10):
+        mgr.update(f, [])
+        f += 1
+    for _ in range(10):  # el #3 vuelve como otra identidad y se fusiona por número
+        mgr.update(f, [obs(11, 1500.0, emb(0, drift=20), number=3, y=900.0)])
+        f += 1
+    xs = [450.0, 750.0, 1050.0, 1350.0, 1650.0]
+    for _ in range(10):
+        mgr.update(
+            f,
+            [obs(11, 1500.0, emb(0, drift=20), y=900.0), *(obs(2 + k, xs[k], emb(1 + k)) for k in range(5))],
+        )
+        f += 1
+    assert all(not p.endswith("_07") for p in pids(mgr))  # el 07 queda para el líbero
+    for _ in range(40):
+        out = mgr.update(
+            f,
+            [
+                obs(11, 1500.0, emb(0, drift=20), y=900.0),
+                *(obs(2 + k, xs[k], emb(1 + k)) for k in range(4)),
+                obs(50, 900.0, emb(10), libero=True, y=300.0),
+            ],
+        )
+        f += 1
+    assert by_track(out)["track_50"] == "TEAM_A_PLAYER_07"
+    for _ in range(3):
+        out = mgr.update(
+            f,
+            [
+                obs(11, 1500.0, emb(0, drift=20), y=900.0),
+                *(obs(2 + k, xs[k], emb(1 + k)) for k in range(3)),
+                obs(6, xs[4], emb(5)),
+                obs(50, 900.0, emb(10), libero=True, y=300.0),
+            ],
+        )
+        f += 1
+        _assert_unique(out)
+
+
+def test_review_h2_libero_taking_over_a_field_track_does_not_keep_the_field_id() -> None:
+    mgr = IdentityManager()
+    start(mgr)
+    out = None
+    for f in range(30, 70):  # el tracker le pasa el track 6 al líbero
+        out = mgr.update(f, [*field(skip={5}, f=f), obs(6, XS[5], emb(10), libero=True)])
+    assert out is not None
+    assert by_track(out)[next(k for k in by_track(out) if k.startswith("track_6"))] == "TEAM_A_PLAYER_07"
+
+
+def test_review_m1_retired_starter_returning_with_his_number_gets_his_id_back() -> None:
+    mgr = IdentityManager()
+    ids = start(mgr, numbers=NUMS)
+    f = 30
+    for f in range(30, 60):
+        mgr.update(f, field(NUMS, skip={5}, f=f))
+    for f in range(60, 90):
+        mgr.update(f, [*field(NUMS, skip={5}, f=f), obs(14, XS[5], emb(12), number=14)])
+    for f in range(90, 240):  # sale el suplente
+        mgr.update(f, field(NUMS, skip={5}, f=f))
+    out = None
+    for f in range(240, 300):  # vuelve el #7 lejos y con otra luz
+        out = mgr.update(
+            f, [*field(NUMS, skip={5}, f=f), obs(70, 300.0, emb(5, drift=20), number=7, y=900.0)]
+        )
+    assert out is not None
+    assert by_track(out).get("track_70") == ids["track_6"]
+
+
+def test_review_m2_substitute_retires_the_identity_it_replaces() -> None:
+    mgr = IdentityManager()
+    ids = start(mgr, numbers=NUMS)
+    for f in range(30, 60):
+        mgr.update(f, field(NUMS, skip={4, 5}, f=f))
+    a = 0.9 * E[4] + 0.44 * E[12]
+    b = 0.95 * E[4] + 0.3 * E[13]
+    out = None
+    for f in range(60, 90):
+        out = mgr.update(f, [*field(NUMS, skip={4, 5}, f=f), obs(14, XS[4], a, number=14), obs(15, XS[5], b)])
+    assert out is not None
+    got = by_track(out)
+    assert got["track_14"] == "TEAM_A_PLAYER_08"
+    taken = got.get("track_15")
+    retired = [pid for pid, idn in mgr._identities.items() if idn.retired]
+    assert len(retired) == 1 and retired[0] != taken  # se retira la que no está en juego
+    assert taken in (ids["track_5"], ids["track_6"])

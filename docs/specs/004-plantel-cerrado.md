@@ -19,8 +19,10 @@ videos y propone usar lo que sabemos del vóley: cada equipo tiene un plantel en
 ## Requerimientos funcionales
 - RF-1: **rol.** El clasificador de equipo informa además si el torso corresponde al prototipo de líbero (color de
   líbero inequívoco, o color ambiguo resuelto como líbero por lado o por número). El tracklet vota el rol; es líbero
-  si la mayoría de sus votos lo son. Un número de `libero_numbers` leído también vota líbero.
-- RF-2: **IDs.** Por equipo: identidades de campo `TEAM_X_PLAYER_01`..`06` (en orden de aparición) y líbero
+  si la mayoría de sus votos lo son. Un número de `libero_numbers` leído vota líbero a través del clasificador
+  (SPEC-003 RF-6, solo con color ambiguo). Un tracklet vinculado cuyo rol sostenido contradice al de su identidad
+  se desvincula; la partición, la corrección de intercambios y la fusión por número no cruzan roles.
+- RF-2: **IDs.** Por equipo: identidades de campo `TEAM_X_PLAYER_01`..`06` (el menor número libre) y líbero
   `TEAM_X_PLAYER_07`. Suplentes (RF-6) desde `08`. Un tracklet solo se asocia a identidades de su mismo rol.
 - RF-3: **cupo visible.** Como máximo 6 identidades del equipo observadas en un mismo frame (campo + líbero),
   como hasta ahora (SPEC-001 RF-8).
@@ -33,8 +35,9 @@ videos y propone usar lo que sabemos del vóley: cada equipo tiene un plantel en
   campo con número confirmado N ≠ M. El líbero (`07`) es un rol: no se veta por número (dos líberos que se turnan
   comparten el `07`; el número se muestra solo si el tracklet lo leyó, SPEC-003 RF-8).
 - RF-6: **suplente.** Si el descarte no es posible solo por el veto de RF-5 y ninguna identidad del equipo tiene M,
-  se crea `TEAM_X_PLAYER_08+` y la identidad de campo con menor costo (la que salió) queda **retirada**: no participa
+  se crea `TEAM_X_PLAYER_08+` y la identidad de campo que le asignó el húngaro (la que salió) queda **retirada**: no participa
   del descarte, solo vuelve por Re-ID normal (umbrales de SPEC-001).
+- RF-6b (revisión S5c M1): un titular retirado que vuelve con su número confirmado recupera su identidad.
 - RF-7: mientras el cupo no está completo se mantiene la política anterior (Re-ID con umbrales, si no, identidad
   nueva).
 
@@ -60,6 +63,7 @@ videos y propone usar lo que sabemos del vóley: cada equipo tiene un plantel en
 - [ ] AC-6: dado 6 identidades de campo con números confirmados, una ausente (#7) y un tracklet con #9 confirmado que tiene otra identidad visible, cuando se procesa, entonces el tracklet no toma la del #7.
 - [ ] AC-7: dado un corte de cámara con 6 + 6 jugadores que vuelven con la misma apariencia, cuando se procesa, entonces no se crea ninguna identidad nueva y cada jugador recupera la suya.
 - [ ] AC-8: dado el clasificador de equipo, cuando el torso es el prototipo de líbero (inequívoco o resuelto como líbero), entonces informa rol líbero; si es de color principal, rol campo.
+- [ ] AC-10 (revisión S5c): dado una fusión por número antes de completar el cupo, la partición de un tracklet que pasa al líbero, un titular retirado que vuelve con su número y un suplente con otro ausente en juego, cuando se procesan, entonces nunca hay un `07` de campo ni `player_id` duplicados, el líbero toma el `07`, el titular recupera su ID y se retira la identidad que salió.
 - [ ] AC-9: dado los clips reales A2, A3, A4, K2, K3 y K5, cuando corre el pipeline, entonces ningún equipo tiene más de 7 IDs salvo suplentes con número, y la revisión visual del usuario aprueba (evidencia en el informe).
 
 ## Restricciones técnicas
@@ -77,7 +81,7 @@ Sin impacto.
 ## Estrategia de testing
 | AC | Test |
 |---|---|
-| AC-1…AC-7 | escenarios de identidad (`tests/scenarios/test_closed_roster.py`) |
+| AC-1…AC-7, AC-10 | escenarios de identidad (`tests/scenarios/test_closed_roster.py`) |
 | AC-8 | unit de equipo (`tests/unit/test_team_roles.py`) |
 | AC-9 | revisión visual manual (usuario) |
 
