@@ -180,3 +180,32 @@ def test_ac7_after_a_cut_everyone_recovers_their_id() -> None:
     for k in range(6):
         assert got[f"track_{100 + k}"] == old[k]
         assert got[f"track_{200 + k}"] == old[6 + k]
+
+
+def test_ac4_never_more_than_six_of_a_team_in_the_output() -> None:
+    # K2/K5 reales: el líbero vuelve mientras el 6.º de campo todavía está saliendo -> 7 tracks vinculados
+    mgr = IdentityManager()
+    for f in range(40):
+        mgr.update(f, [*field(skip={5}, f=f), obs(7, 900.0, emb(10), libero=True, y=300.0)])
+    for f in range(40, 80):
+        mgr.update(f, [*field(f=f)])
+    out = None
+    for f in range(80, 90):
+        out = mgr.update(f, [*field(f=f), obs(7, 900.0, emb(10), libero=True, y=300.0)])
+        assert sum(p.team_id == "TEAM_A" for p in out.players) <= CFG.roster_size
+        ids = [p.player_id for p in out.players]
+        assert len(ids) == len(set(ids))
+
+
+def test_ac4_reidentification_does_not_exceed_six() -> None:
+    # K2/K5 reales: con 6 visibles, el líbero vuelve con un track nuevo y se re-identifica en el mismo frame
+    mgr = IdentityManager()
+    start(mgr)  # los 6 de campo
+    for f in range(30, 80):  # el 6.º sale y entra el líbero
+        out = mgr.update(f, [*field(skip={5}, f=f), obs(7, 900.0, emb(10), libero=True, y=300.0)])
+    assert by_track(out)["track_7"] == "TEAM_A_PLAYER_07"
+    for f in range(80, 85):  # vuelve el 6.º (mismo track) y el líbero se pierde un momento
+        mgr.update(f, [*field(f=f)])
+    for f in range(85, 110):  # vuelve el líbero con un track nuevo mientras el 6.º sigue visible
+        out = mgr.update(f, [*field(f=f), obs(77, 900.0, emb(10), libero=True, y=300.0)])
+        assert sum(p.team_id == "TEAM_A" for p in out.players) <= CFG.roster_size

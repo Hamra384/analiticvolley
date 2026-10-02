@@ -187,8 +187,9 @@ class IdentityManager:
         # tracklets con identidad: actualizan su identidad. Si el equipo observado contradice al de la
         # identidad (intercambio del tracker entre equipos) no se emite ni se actualiza.
         contradicted: set[int] = set()
+        contradicted |= self._over_cap(observed, frame)
         for t, o, i in observed:
-            if t.player is None:
+            if t.player is None or i in contradicted:
                 continue
             idn = self._identities[t.player]
             if o.team is not None and o.team != idn.team:
@@ -240,6 +241,23 @@ class IdentityManager:
             if pid in self._identities and st in (PlayerState.DETECTED, PlayerState.REIDENTIFIED):
                 self._identities[pid].state = PlayerState.TRACKED  # (una fusionada ya no existe)
         return FrameOutput(frame=frame, players=players)
+
+    def _over_cap(self, observed: list[tuple[_Tracklet, Observation, int]], frame: int) -> set[int]:
+        """SPEC-004 RF-3: como máximo `roster_size` identidades por equipo en un frame. Si hay más tracklets
+        vinculados (p. ej. vuelve el líbero mientras sale el de campo), se postergan los que no venían
+        observados en el frame anterior; no se emiten ni actualizan hasta que haya lugar."""
+        out: set[int] = set()
+        for team in Team:
+            linked = [
+                (self._identities[t.player], t, i)
+                for t, _, i in observed
+                if t.player is not None and self._identities[t.player].team == team
+            ]
+            if len(linked) <= self.config.roster_size:
+                continue
+            linked.sort(key=lambda x: (x[0].last_frame != frame - 1, -x[1].obs_count, x[1].key))
+            out |= {i for _, _, i in linked[self.config.roster_size :]}
+        return out
 
     def _tracklet_shows(self, t: _Tracklet, number: int) -> bool:
         """SPEC-003 RF-8: el número de la identidad sale solo en un tracklet que lo leyó.
@@ -566,6 +584,8 @@ class IdentityManager:
                 if cost[a, b] >= cfg.accept_cost or t.player is not None:
                     continue
                 idn = candidates[b]
+                if self._visible(idn.team, frame) >= cfg.roster_size:
+                    continue  # SPEC-004 RF-3: el cupo visible también vale para la Re-ID
                 continuous = frame - idn.last_frame <= 1 and not idn.after_cut  # cambio de track sin hueco
                 self._link(t, idn)
                 self._update_identity(idn, t, o, embs[i], False, frame)
@@ -595,6 +615,9 @@ class IdentityManager:
         self._eliminate(ready, embs, frame, frame_state)
 
     # ── plantel cerrado (SPEC-004) ───────────────────────────────────────────────
+    def _visible(self, team: Team, frame: int) -> int:
+        return sum(1 for i in self._identities.values() if i.team == team and i.last_frame == frame)
+
     def _same_role(self, t: _Tracklet, idn: _Identity) -> bool:
         return not self.config.closed_roster or t.libero == idn.libero
 
@@ -620,9 +643,7 @@ class IdentityManager:
                 group = [r for r in ready if r[0].team == team and r[0].libero == libero]
                 if not group:
                     continue
-                room = cfg.roster_size - sum(
-                    1 for i in self._identities.values() if i.team == team and i.last_frame == frame
-                )
+                room = cfg.roster_size - self._visible(team, frame)
                 free = [
                     i
                     for i in sorted(self._identities.values(), key=lambda x: x.pid)
