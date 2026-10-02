@@ -1,0 +1,24 @@
+# Configuración visual del video jpn_kor_2026 (SPEC-002 RF-2, RF-3).
+# Calibrado 2026-10-02 sobre muestras de los clips K1–K5 (k-means de color de torso + verificación visual).
+# Colores en Lab de OpenCV (8 bits). TEAM_A = Japón en ambos videos.
+
+court:
+  # piso salmón/naranja (pico de tono 2: el rango cruza el 0 del círculo de tono)
+  hsv_ranges:
+    - lower: [0, 60, 130]
+      upper: [12, 255, 255]
+    - lower: [170, 60, 130]
+      upper: [180, 255, 255]
+  margin_px: 20
+exclude_regions:
+  - [0.0, 0.0, 1.0, 0.07]
+
+teams:
+  A:
+    name: Japón
+    main: [72, 164, 131]      # camiseta roja
+    libero: [170, 132, 122]   # líbero blanco #1: ambiguo con el principal de B -> se resuelve por lado
+  B:
+    name: Corea
+    main: [170, 132, 122]     # camiseta blanca
+    libero: [50, 135, 114]    # líbero azul oscuro #5

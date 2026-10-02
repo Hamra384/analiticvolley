@@ -19,6 +19,9 @@ def ignored(path: str) -> bool:
         "docs/data/ANNOTATION.md",
         "docs/spikes/001-tracker.md",
         "src/volley_cv/data/x.py",
+        # bug S4: 'videos/' sin anclar ignoraba la configuración de videos
+        "configs/videos/jpn_arg_2026.yaml",
+        "src/volley_cv/video/source.py",
     ],
 )
 def test_documentation_and_code_are_not_ignored(path: str) -> None:
