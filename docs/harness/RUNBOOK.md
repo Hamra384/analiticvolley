@@ -31,6 +31,18 @@ de prueba: debe aparecer `[harness:guard_bash] push forzado…`. Si no aparece, 
 - Video agregado por error: si no se pusheó, `git rm --cached <archivo>`; si se pusheó, **avisar al humano**
   (requiere reescritura de historial → autorización explícita).
 
+## Recursos de la máquina (16 GB RAM, GTX 1660 Super 6 GB)
+
+No correr a la vez CVAT (Docker, varios GB de RAM) y trabajos de GPU largos (spikes, evaluación): en S2 la
+combinación agotó la RAM y tumbó Docker. Secuencia: `docker compose stop` en `D:\AIVolley\cvat` → trabajo de GPU →
+`docker compose start`.
+
+## CVAT local
+
+- Ubicación: `D:\AIVolley\cvat` (fuera del repo). Arranque: `docker compose up -d`; UI en http://localhost:8080.
+- Credenciales: `<data>/annotations/cvat_credentials.txt` (fuera del repo).
+- Re-crear tareas: `uv run --with "cvat-sdk~=2.77.0" python -m tools.cvat_setup` (saltea las que ya existen).
+
 ## Incidentes y lecciones aprendidas
 
 Registrar en `docs/sprints/SN.md` → sección "Retro del harness".

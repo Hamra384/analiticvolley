@@ -1,4 +1,5 @@
 # ── Medios y datos: NUNCA en el repo (repo público). Control adicional: scripts/check_no_media.py + hook guard_bash
+# Patrones de directorios anclados a la raíz ("/data/"): sin ancla, "data/" ignoraba docs/data/ (bug S2).
 videos/
 *.mp4
 *.mkv
@@ -6,10 +7,10 @@ videos/
 *.avi
 *.webm
 *.m4v
-data/
-training_data/
-svhn_data/
-diag_out/
+/data/
+/training_data/
+/svhn_data/
+/diag_out/
 diag_ocr.txt
 
 # Pesos de modelos descargables (los .onnx versionados viven en models/, ver ADR-0003)

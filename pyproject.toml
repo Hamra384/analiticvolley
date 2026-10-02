@@ -19,6 +19,7 @@ ml = [
     "torchvision==0.20.1",
     "ultralytics==8.4.53",
     "onnxruntime>=1.19",
+    "boxmot>=25.0.0",
 ]
 
 [dependency-groups]
