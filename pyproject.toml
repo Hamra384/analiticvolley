@@ -60,6 +60,8 @@ markers = [
 [tool.coverage.run]
 source = ["volley_cv"]
 branch = true
+# adaptadores de modelos (torch/ultralytics/boxmot, GPU): no corren en CI; evidencia manual en docs/sprints
+omit = ["*/volley_cv/adapters.py"]
 
 [tool.ruff]
 line-length = 110
@@ -78,5 +80,7 @@ mypy_path = "src"
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["cv2", "scipy.*", "ultralytics.*"]
+module = ["cv2", "scipy.*", "ultralytics.*", "boxmot.*", "torch.*", "torchvision.*"]
 ignore_missing_imports = true
+# el extra `ml` no se instala en CI: se tratan igual (sin seguir) en local y en CI
+follow_imports = "skip"

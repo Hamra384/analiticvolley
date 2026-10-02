@@ -1,6 +1,7 @@
 # ── Medios y datos: NUNCA en el repo (repo público). Control adicional: scripts/check_no_media.py + hook guard_bash
-# Patrones de directorios anclados a la raíz ("/data/"): sin ancla, "data/" ignoraba docs/data/ (bug S2).
-videos/
+# Patrones de directorios anclados a la raíz ("/data/"): sin ancla, "data/" ignoraba docs/data/ (bug S2)
+# y "videos/" ignoraba configs/videos/ (bug S4). Los archivos de video se ignoran en cualquier lugar por extensión.
+/videos/
 *.mp4
 *.mkv
 *.mov
