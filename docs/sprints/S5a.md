@@ -42,6 +42,18 @@ evidencia de lado del tramo; sin evidencia (plano lateral) decide el número. Re
 idénticos (el #19 de A3 sigue en Argentina, 480 frames); en K2, B05 queda coreano todo el tramo y A09 (#5 de Japón)
 sube de 246 a 282 frames. Límite: cerca de la red la posición es menos confiable.
 
+### Revisión final con clips no vistos (A4, K3)
+
+Antes del merge corrí dos clips que nunca usé para desarrollar. Hallazgo: tras una re-identificación la identidad
+pasaba a **otra persona** y le dejaba pegado el número (K3: el #9 rotulado #5 durante ~45 frames; A4: el líbero
+#19 rotulado #11). RF-8/AC-15: el número se muestra solo en un tracklet que lo leyó. Verificado: esos casos
+desaparecen. Costo: menos cajas con número (A2 54→45 %, A3 48→28 %, A4 43→32 %, K2 16→12 %, K3 28→17 %,
+K5 11→9 %). Cuántas de las cajas perdidas eran correctas es **desconocido** sin anotación.
+
+El usuario revisó los videos: **todavía se confunde muchas veces**. Propuso (y se acordó para el sprint S5c) un
+plantel cerrado por equipo: IDs 1–6 + 7 para el líbero, re-identificación por descarte en vez de IDs nuevos, y un ID
+nuevo solo si el número demuestra un suplente.
+
 ## Revisión independiente (subagente reviewer)
 
 1 hallazgo alto y 4 medios. Todos se corrigieron con un test de regresión, salvo M4, que quedó documentado (tests
@@ -59,10 +71,10 @@ en rojo observados antes de cada corrección):
 
 ## Pruebas
 
-- 324 tests locales (0 salteados); ruff, format y mypy limpios; cobertura 98,3 % (base 98,4 %, dentro de la
+- 325 tests locales (0 salteados); ruff, format y mypy limpios; cobertura 98,3 % (base 98,4 %, dentro de la
   tolerancia). CI: ver PR.
 - Criterios agregados durante el sprint por evidencia del video: RF-2b/AC-10 (oclusión), RF-6b/AC-11 (número
-  recordado), RF-6c/AC-12 (color compatible), RF-6d/AC-14 (lado del rival), AC-13 (revisión).
+  recordado), RF-6c/AC-12 (color compatible), RF-6d/AC-14 (lado del rival), AC-13 (revisión), RF-8/AC-15 (número solo en el tracklet que lo leyó).
 
 ## Errores míos en este sprint
 
@@ -80,4 +92,4 @@ en rojo observados antes de cada corrección):
 
 ## Próximo
 
-S5b: pelota (detector específico y estados DETECTED/PREDICTED/LOST). Para S6 hace falta la anotación en CVAT.
+S5c: plantel cerrado por equipo (acordado con el usuario). Después S5b (pelota) y S6 (evaluación; requiere anotación en CVAT).

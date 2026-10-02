@@ -213,6 +213,8 @@ class IdentityManager:
             state = frame_state.get(idn.pid, idn.state)
             idn.state = state
             number, conf = idn.jersey if idn.jersey else (None, 0.0)
+            if number is not None and not self._tracklet_shows(t, number):
+                number, conf = None, 0.0
             players.append(
                 PlayerOut(
                     player_id=idn.pid,
@@ -230,6 +232,13 @@ class IdentityManager:
             if pid in self._identities and st in (PlayerState.DETECTED, PlayerState.REIDENTIFIED):
                 self._identities[pid].state = PlayerState.TRACKED  # (una fusionada ya no existe)
         return FrameOutput(frame=frame, players=players)
+
+    def _tracklet_shows(self, t: _Tracklet, number: int) -> bool:
+        """SPEC-003 RF-8: el número de la identidad sale solo en un tracklet que lo leyó.
+
+        Si la identidad pasó a otro tracklet (Re-ID, partición) puede ser otra persona: sin lectura, `null`.
+        """
+        return any(r.number == number and r.confidence >= self.config.jersey_min_conf for r, _, _ in t.reads)
 
     @property
     def merges(self) -> list[tuple[str, str, int]]:

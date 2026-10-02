@@ -48,6 +48,11 @@ y la posición en la imagen no alcanza para el líbero. El número de camiseta e
   número del líbero. Sin evidencia de lado (plano lateral) decide el número. Límite conocido: cerca de la red la
   posición es menos confiable.
 
+- RF-8 (revisión final con clips no vistos A4/K3): el número de una identidad se muestra solo en un tracklet que
+  lo leyó. Si la identidad pasa a otro tracklet (Re-ID, partición) sin lectura propia, sale `null` hasta leerlo.
+  Evidencia: en K3 la identidad del #5 pasó al #9 y lo mostró como #5 durante 45 frames; en A4 el líbero #19 salió
+  como #11.
+
 ## Requerimientos no funcionales
 - RNF-1: la lectura no debe bajar el FPS de punta a punta más de un 40 % (se reporta).
 - RNF-2: sin dependencias nuevas fuera de easyocr (extra `ml`, Apache-2.0).
@@ -73,6 +78,7 @@ y la posición en la imagen no alcanza para el líbero. El número de camiseta e
 - [ ] AC-12: dado un torso ambiguo pero más cerca del principal del rival que del líbero dueño del número leído, cuando se clasifica, entonces el número no cambia el equipo.
 - [ ] AC-13 (revisión S5a): dado una fusión X → Y, cuando el tracker revive el tracklet viejo de Y junto al de X, entonces ningún frame tiene `player_id` duplicado (un solo tracklet vinculado por identidad) y una fusión en el frame de creación se reporta `REIDENTIFIED`, no `DETECTED`.
 - [ ] AC-14: dado un torso del color ambiguo con el número del líbero de Y, cuando la persona está del lado del rival de Y, entonces el número no decide (queda en el equipo del rival); del lado de Y, es de Y.
+- [ ] AC-15: dado una identidad con número 7 que pasa a otro tracklet sin lecturas, cuando se emite la salida, entonces `jersey_number` es `null` hasta que ese tracklet lea el 7.
 - [ ] AC-8: dado una lectura con confianza < `min_conf` o con más de 2 dígitos, cuando la procesa el lector easyocr, entonces no se emite (test con OCR falso).
 - [ ] AC-9: dado los clips A2, A3, K2 y K5 reales, cuando corre el pipeline, entonces la revisión visual muestra menos líberos en el equipo contrario e identidades fusionadas por número (evidencia manual en el informe).
 
@@ -90,7 +96,7 @@ Sin impacto: no hay datos personales (los números son públicos en la transmisi
 ## Estrategia de testing
 | AC | Test |
 |---|---|
-| AC-1…AC-3, AC-5, AC-13 | escenarios de identidad (`tests/scenarios/test_jersey_identity.py`) |
+| AC-1…AC-3, AC-5, AC-13, AC-15 | escenarios de identidad (`tests/scenarios/test_jersey_identity.py`) |
 | AC-4 | unit de reescritura (`tests/unit/test_s5a_units.py`) e integración (`tests/integration/test_jersey_pipeline.py`) |
 | AC-6, AC-12, AC-14 | unit de equipo (`tests/unit/test_s5a_units.py`) |
 | AC-7, AC-10, AC-11 | integración del pipeline con lector falso (`tests/integration/test_jersey_pipeline.py`) |

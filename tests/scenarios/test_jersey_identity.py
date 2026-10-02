@@ -131,3 +131,18 @@ def test_review_m1_merge_at_creation_is_reidentified_then_tracked() -> None:
     _merged_after_gap(mgr, read_every=1)  # lecturas en cada frame: se fusiona en el frame de creación
     states = [s for s in mgr.identity_states().values()]
     assert PlayerState.DETECTED not in states
+
+
+def test_ac15_number_is_shown_on_a_new_tracklet_only_after_it_reads_it() -> None:
+    # K3/A4 real: la identidad pasó a otra persona (otro track, sin lecturas) y le quedó pegado el número
+    mgr = IdentityManager()
+    for f in range(30):
+        mgr.update(f, [obs(1, 800, 0, number=7 if f % 2 == 0 else None)])
+    out = mgr.update(30, [obs(1, 800, 0)])
+    assert out.players[0].jersey_number == 7  # mismo track que lo leyó
+    mgr.update(31, [])
+    outs = [mgr.update(f, [obs(2, 805, 0)]) for f in range(32, 40)]  # otro track, sin lecturas
+    assert all(o.players[0].player_id == "TEAM_A_PLAYER_01" for o in outs)  # la identidad sigue
+    assert all(o.players[0].jersey_number is None for o in outs)  # pero el número no se muestra
+    out = mgr.update(40, [obs(2, 805, 0, number=7)])
+    assert out.players[0].jersey_number == 7  # el track nuevo lo leyó: vuelve
