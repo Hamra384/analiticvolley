@@ -85,7 +85,7 @@ mypy_path = "src"
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
-module = ["cv2", "scipy.*", "ultralytics.*", "boxmot.*", "torch.*", "torchvision.*"]
+module = ["cv2", "scipy.*", "ultralytics.*", "boxmot.*", "torch.*", "torchvision.*", "easyocr.*"]
 ignore_missing_imports = true
 # el extra `ml` no se instala en CI: se tratan igual (sin seguir) en local y en CI
 follow_imports = "skip"

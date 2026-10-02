@@ -55,7 +55,7 @@ class EasyOcrJerseyReader:
 
     def _reader(self) -> Any:
         if self._ocr is None:
-            import easyocr  # type: ignore[import-untyped]
+            import easyocr
 
             self._ocr = easyocr.Reader(["en"], gpu=True, verbose=False)
         return self._ocr
