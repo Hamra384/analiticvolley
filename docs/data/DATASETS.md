@@ -14,6 +14,12 @@ Antes de incorporar una fuente nueva se agrega una fila con fuente, licencia, us
 | `partido` | `videos/partido.mp4` (360p, 89 min) | Propio del usuario (transmisión UBA Vóley) | Sin verificar | Desarrollo | — | Excluido de evaluación (resolución insuficiente) |
 | `partido2` | `videos/partido2.mp4` (360p, 49 min) | Propio del usuario (VNL FRA–BRA) | Sin verificar | Desarrollo | — | Excluido de evaluación (resolución insuficiente) |
 
+### Material de referencia (no evaluación)
+
+| ID | Ubicación (relativa a datos) | Fuente | Licencia / derechos | Uso | Estado |
+|---|---|---|---|---|---|
+| `datavolley4_na7ki` | `videos/tutorials/datavolley4_na7ki/` (10 videos, ~80 min, + `.info.json` y descripción) | Lista de YouTube "DATAVOLLEY 4 - TUTORIAL" (`PLMgeGsmCIcpY0nVwTG-qTMlIOZOKqhbtl`), canal Na7ki Tayra | Licencia estándar de YouTube; derechos del creador. Descarga pedida por el usuario (2026-10-02) conociendo que contraviene los ToS de YouTube | Solo estudio local: entender la codificación de acciones del juego (zonas de saque, recepción) para etapas posteriores al MVP 1. No redistribuir | Activo |
+
 ## Datasets de terceros
 
 | Nombre | Fuente | Licencia | Uso previsto | Componente | Estado |

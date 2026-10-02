@@ -44,6 +44,7 @@ class Observation:
     team: Team | None
     embedding: NDArray[np.float32] | None = field(default=None)
     jersey: JerseyRead | None = None
+    in_court: bool = True  # apoyo sobre la cancha (fuera = zona libre de la zona de juego); RF-3b
 
     @property
     def center(self) -> tuple[float, float]:

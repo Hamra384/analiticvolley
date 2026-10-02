@@ -36,6 +36,8 @@ class VideoConfig(BaseModel):
     court: CourtConfig
     exclude_regions: list[tuple[float, float, float, float]] = Field(default_factory=list)
     teams: dict[str, TeamColors]
+    officials: list[Lab] = Field(default_factory=list)  # árbitros / jueces de línea (SPEC-002 RF-3b)
+    play_margin: float = Field(default=0.12, ge=0.0, le=0.5)  # zona de juego: fracción del alto (RF-2b)
 
 
 def load_video_config(video_id: str, root: Path = PROJECT_ROOT) -> VideoConfig:

@@ -49,7 +49,9 @@ class TeamClassifier:
         max_spread: float = 0.30,
         min_separation: float = 0.08,
         clear_gap: float = 0.05,
+        officials: Sequence[tuple[float, float, float]] = (),
     ) -> None:
+        self._officials = [np.array(o, dtype=np.float64) for o in officials]
         self.max_dist, self.ambiguity_margin = max_dist, ambiguity_margin
         self.side_memory, self.side_margin = side_memory, side_margin
         # evidencia de lado (fracciones del alto del frame): mínimo de apoyos, dispersión máxima (IQR) para
@@ -87,6 +89,7 @@ class TeamClassifier:
             else:
                 ambiguous.append((k, close))
         self._forget()
+        as_libero: dict[Team, list[int]] = {}
         for k, close in ambiguous:
             # caso tratable: el color es el principal de un equipo (X) y el líbero del otro (Y)
             liberos = {t for t, lib in close if lib}
@@ -96,6 +99,18 @@ class TeamClassifier:
             (owner,) = liberos
             (other,) = mains - liberos
             result[k] = self._by_side(boxes[k][3], owner, other, h)
+            if result[k] == owner:
+                as_libero.setdefault(owner, []).append(k)
+        # RF-3c: hay a lo sumo un líbero por equipo en cancha; si varios se resolvieron como líbero, solo se
+        # conserva el más central en la franja de su equipo
+        for team, ks in as_libero.items():
+            if len(ks) > 1:
+                band = self._band(team, h)
+                med = band[0] if band else 0.0
+                keep = min(ks, key=lambda k: abs(boxes[k][3] - med))
+                for k in ks:
+                    if k != keep:
+                        result[k] = None
         return result
 
     def _band(self, team: Team, h: float) -> tuple[float, float, float] | None:
@@ -110,35 +125,46 @@ class TeamClassifier:
         half = max((q3 - q1) / 2, self.side_margin * h)
         return med, med - half - self.side_margin * h, med + half + self.side_margin * h
 
-    def _by_side(self, feet: float, owner: Team, other: Team, h: float) -> Team | None:
+    def _by_side(self, feet: float, owner: Team, other: Team, h: float) -> Team:
         """Equipo de un color ambiguo (principal de `other` = líbero de `owner`) según el lado en el tramo.
 
-        Conservador: ante cualquier duda devuelve None (un equipo equivocado es peor que desconocido).
+        RF-3d (S4.1): prior por cantidad. Con ese color hay ~6 jugadores de `other` y a lo sumo un líbero de
+        `owner`, así que por defecto es `other`; solo con evidencia fuerte de lado es el líbero de `owner`.
+        (Devolver "desconocido" en la duda hacía que pocos votos erróneos decidieran el equipo de la
+        identidad: en A2 cinco japoneses terminaron como Argentina.)
         """
         own = self._band(owner, h)
         if own is None:
-            return None
+            return other
         med, lo, hi = own
+        if not lo <= feet <= hi:
+            return other
         rival = self._band(other, h)
         if rival is not None:
-            if abs(rival[0] - med) < self.min_separation * h:
-                return None  # los lados no están separados en la imagen
-            d_own, d_rival = abs(feet - med), abs(feet - rival[0])
-            if lo <= feet <= hi and d_own < d_rival:
-                return owner
-            if not lo <= feet <= hi and d_rival < d_own:
-                return other
-            return None
-        if lo <= feet <= hi:
-            # sin evidencia del otro equipo, solo el centro de la franja es suficientemente seguro
-            return owner if abs(feet - med) <= (hi - lo) / 4 else None
-        gap = (lo - feet) if feet < lo else (feet - hi)
-        return other if gap >= self.clear_gap * h else None
+            separated = abs(rival[0] - med) >= self.min_separation * h
+            return owner if separated and abs(feet - med) < abs(feet - rival[0]) else other
+        # sin evidencia del otro equipo, solo el centro de la franja es suficientemente seguro
+        return owner if abs(feet - med) <= (hi - lo) / 4 else other
 
     def _forget(self) -> None:
         for q in self._side.values():
             while q and q[0][0] <= self._frame - self.side_memory:
                 q.popleft()
+
+    def is_official(self, frame: NDArray[np.uint8], boxes: Sequence[Box]) -> list[bool]:
+        """True si el prototipo de color más cercano al torso es de un oficial (RF-3b)."""
+        if not self._officials:
+            return [False] * len(boxes)
+        out = []
+        for box in boxes:
+            lab = torso_lab(frame, box)
+            if lab is None:
+                out.append(False)
+                continue
+            d_off = min(float(np.linalg.norm(lab - p)) for p in self._officials)
+            d_team = min(float(np.linalg.norm(lab - p)) for _, _, p in self._protos)
+            out.append(d_off < d_team and d_off <= self.max_dist)
+        return out
 
     def reset(self) -> None:
         """Corte de edición: se descarta la evidencia de lado del tramo anterior."""

@@ -13,6 +13,11 @@ court:
 exclude_regions:
   - [0.0, 0.0, 1.0, 0.07]
 
+# S4.1: oficiales con camisa azul (cluster de la calibración de S4, Lab ~[71,162,71]); falta medir jueces
+# de línea en K (pendiente de revisión visual)
+officials:
+  - [71, 162, 71]
+
 teams:
   A:
     name: Japón

@@ -14,6 +14,15 @@ exclude_regions:
   # marcador sobreimpreso (fracciones del frame: x1, y1, x2, y2)
   - [0.0, 0.0, 1.0, 0.07]
 
+# S4.1: oficiales (se descartan antes del tracker). Medido en A2 sobre 290 recortes de jueces de línea:
+# chaleco gris, Lab mediana [122,126,126] (p10 [104,123,124], p90 [134,127,128]).
+officials:
+  - [122, 126, 126]
+  - [105, 124, 125]   # sombra / tono más oscuro del mismo chaleco (p10)
+  # staff con remera naranja junto a la cancha (cluster de la calibración S4, Lab ~[126,150,153]); en la revisión
+  # visual de S4.1 heredó la identidad de un jugador. El líbero rojo #37 queda más cerca de su propio prototipo.
+  - [126, 150, 153]
+
 teams:
   A:
     name: Japón

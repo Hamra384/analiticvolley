@@ -12,6 +12,7 @@ class IdentityConfig:
     lost_after: int = 15  # frames sin observación: OCCLUDED -> LOST
     roster_size: int = 6  # identidades vigentes máximas por equipo (RF-8)
     max_wait_frames: int = 30  # tracklet ambiguo: frames de espera antes de decidir
+    team_min_share: float = 0.8  # proporción mínima de votos del mismo equipo para crear identidad (RF-3b)
 
     # asociación (RF-4); distancias de apariencia = coseno (0..2), movimiento en alturas de jugador
     w_appearance: float = 0.6
@@ -22,6 +23,8 @@ class IdentityConfig:
     radius_growth_h: float = 0.2  # crecimiento del radio por frame perdido
     max_radius_h: float = 6.0
     long_gap_frames: int = 90  # tras este hueco el movimiento deja de restringir (solo apariencia)
+    # Re-ID tras hueco largo o corte (sin restricción de movimiento): distancia de apariencia máxima (RF-4d)
+    appearance_only_max_dist: float = 0.08
     reid_min_obs_without_embedding: int = 3  # sin apariencia, un tracklet de 1-2 frames no re-identifica
     jersey_bonus: float = 0.25
     jersey_penalty: float = 0.5
@@ -31,7 +34,8 @@ class IdentityConfig:
     ref_ema: float = 0.9  # media móvil de la referencia de un tracklet
 
     # partición de tracklets (RF-5)
-    split_distance: float = 0.35
+    # SPIKE-003 (histograma de color, A2/K2): mismo jugador p90 = 0,14; compañeros distintos mediana 0,25-0,37
+    split_distance: float = 0.2
     split_frames: int = 8
     team_split_frames: int = 3
 
