@@ -74,6 +74,7 @@ python_version = "3.12"
 strict = true
 files = ["src", "scripts", ".claude/hooks"]
 explicit_package_bases = true
+mypy_path = "src"
 exclude = ["legacy/"]
 
 [[tool.mypy.overrides]]
