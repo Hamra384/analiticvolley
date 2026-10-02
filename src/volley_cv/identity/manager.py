@@ -70,6 +70,16 @@ class _Tracklet:
     )  # (lectura, sumada a, frame)
     player: str | None = None
     wait: int = 0
+    # SPEC-003 RF-5: lecturas de otro número retenidas hasta decidir si el tracker cambió de persona
+    split_candidate: int | None = None
+    held_reads: list[tuple[JerseyRead, int]] = field(default_factory=list)
+
+    def established_number(self, min_conf: float, min_reads: int) -> int | None:
+        counts = Counter(r.number for r, _, _ in self.reads if r.confidence >= min_conf)
+        if not counts:
+            return None
+        number, n = counts.most_common(1)[0]
+        return number if n >= min_reads else None
 
     @property
     def team(self) -> Team | None:
@@ -100,6 +110,26 @@ class _Identity:
     votes: JerseyVotes = field(default_factory=JerseyVotes)
     jersey: tuple[int, float] | None = None
     after_cut: bool = False
+    seen: list[list[int]] = field(default_factory=list)  # intervalos [inicio, fin] de frames observados
+
+    def mark_seen(self, frame: int) -> None:
+        if self.seen and frame <= self.seen[-1][1] + 1:
+            self.seen[-1][1] = max(self.seen[-1][1], frame)
+        else:
+            self.seen.append([frame, frame])
+
+    def coexisted_with(self, other: _Identity) -> bool:
+        """True si alguna vez se observaron en el mismo frame (SPEC-003 RF-3)."""
+        i = j = 0
+        a, b = self.seen, other.seen
+        while i < len(a) and j < len(b):
+            if a[i][0] <= b[j][1] and b[j][0] <= a[i][1]:
+                return True
+            if a[i][1] < b[j][1]:
+                i += 1
+            else:
+                j += 1
+        return False
 
     def gallery_mean(self) -> Vec | None:
         if not self.gallery:
@@ -119,6 +149,7 @@ class IdentityManager:
         self._partners: dict[str, set[str]] = {}
         self._since_sep: dict[str, int] = {}
         self._episode_start: dict[str, int] = {}  # frame en que la identidad entró a su superposición actual
+        self._merges: list[tuple[str, str, int]] = []
 
     # ── API pública ──────────────────────────────────────────────────────────────
     def update(self, frame: int, observations: Sequence[Observation]) -> FrameOutput:
@@ -172,7 +203,7 @@ class IdentityManager:
             else:
                 idn.state = PlayerState.OCCLUDED
 
-        self._resolve_jerseys()
+        self._resolve_jerseys(frame)
 
         players = []
         for t, o, i in observed:
@@ -196,9 +227,14 @@ class IdentityManager:
             )
         # al frame siguiente, DETECTED/REIDENTIFIED pasan a TRACKED si se siguen observando
         for pid, st in frame_state.items():
-            if st in (PlayerState.DETECTED, PlayerState.REIDENTIFIED):
-                self._identities[pid].state = PlayerState.TRACKED
+            if pid in self._identities and st in (PlayerState.DETECTED, PlayerState.REIDENTIFIED):
+                self._identities[pid].state = PlayerState.TRACKED  # (una fusionada ya no existe)
         return FrameOutput(frame=frame, players=players)
+
+    @property
+    def merges(self) -> list[tuple[str, str, int]]:
+        """Fusiones por número (origen, destino, frame) — SPEC-003 RF-3."""
+        return list(self._merges)
 
     def identity_states(self) -> dict[str, PlayerState]:
         """Estado actual de todas las identidades (incluye OCCLUDED/LOST, que no salen en FrameOutput)."""
@@ -230,9 +266,11 @@ class IdentityManager:
         cfg = self.config
         key = self._raw_to_key.get(o.track_id)
         t = self._tracklets.get(key) if key is not None else None
+        held = False
         if t is None:
             t = self._new_tracklet(o.track_id)
         elif not overlap:
+            t, held = self._number_split(t, o, frame)
             if emb is not None and t.ref is not None and _cos_dist(emb, t.ref) > cfg.split_distance:
                 t.far_count += 1
                 t.recent.append(emb)
@@ -262,11 +300,35 @@ class IdentityManager:
                 t.ref = emb
             elif not overlap and t.far_count == 0:
                 t.ref = _unit(cfg.ref_ema * t.ref + (1 - cfg.ref_ema) * emb)
-        if o.jersey is not None:
+        if o.jersey is not None and not held:
             t.reads.append((o.jersey, t.player, frame))
             if t.player is not None:
                 self._identities[t.player].votes.add(o.jersey)
         return t
+
+    def _number_split(self, t: _Tracklet, o: Observation, frame: int) -> tuple[_Tracklet, bool]:
+        """SPEC-003 RF-5: un tracklet con número establecido que lee otro número de forma sostenida se parte.
+
+        Las lecturas del número nuevo se retienen (no votan) hasta confirmar el cambio; si el número original
+        vuelve a leerse, se descartan. Devuelve (tracklet vigente, lectura actual retenida).
+        """
+        cfg = self.config
+        r = o.jersey
+        if r is None or r.confidence < cfg.jersey_min_conf:
+            return t, False
+        est = t.established_number(cfg.jersey_min_conf, cfg.jersey_min_reads)
+        if est is None or r.number == est:
+            t.split_candidate, t.held_reads = None, []
+            return t, False
+        if t.split_candidate != r.number:
+            t.split_candidate, t.held_reads = r.number, []
+        t.held_reads.append((r, frame))
+        if len(t.held_reads) < cfg.jersey_split_reads:
+            return t, True
+        held = t.held_reads[:-1]  # la lectura actual se agrega al tracklet nuevo por el flujo normal
+        new = self._split(t)
+        new.reads = [(read, None, f) for read, f in held]
+        return new, False
 
     def _new_tracklet(self, raw: int) -> _Tracklet:
         n = self._split_count[raw]
@@ -413,6 +475,7 @@ class IdentityManager:
             inst = (float(np.clip(inst[0], -vmax, vmax)), float(np.clip(inst[1], -vmax, vmax)))
             idn.vel = (0.7 * idn.vel[0] + 0.3 * inst[0], 0.7 * idn.vel[1] + 0.3 * inst[1])
         idn.center, idn.height, idn.last_frame = o.center, o.height, frame
+        idn.mark_seen(frame)
         idn.tracklet = t.key
         idn.after_cut = False
         if emb is not None and not overlap and t.far_count == 0:
@@ -555,12 +618,49 @@ class IdentityManager:
             moved.append((read, pid, f))
         t.reads = moved
 
-    def _resolve_jerseys(self) -> None:
+    def _resolve_jerseys(self, frame: int) -> None:
         for team in Team:
             cands = {
                 pid: idn.votes.candidate(self.config)
                 for pid, idn in sorted(self._identities.items())
                 if idn.team == team
             }
+            # SPEC-003 RF-3: mismo número confirmado en identidades que nunca coexistieron -> mismo jugador
+            by_number: dict[int, list[str]] = {}
+            for pid, cand in cands.items():
+                if cand is not None:
+                    by_number.setdefault(cand[0], []).append(pid)
+            for pids in by_number.values():
+                ordered = sorted(pids, key=lambda p: (self._identities[p].created, p))
+                target = ordered[0]
+                for other in ordered[1:]:
+                    if not self._identities[other].coexisted_with(self._identities[target]):
+                        self._merge(other, target, frame)
+                        cands.pop(other, None)
+                        cands[target] = self._identities[target].votes.candidate(self.config)
             for pid, res in resolve_team_conflicts(cands).items():
                 self._identities[pid].jersey = res
+
+    def _merge(self, src_pid: str, dst_pid: str, frame: int) -> None:
+        """Fusiona la identidad `src` en `dst` (más antigua): tracklets, votos, galería y estado."""
+        src, dst = self._identities[src_pid], self._identities[dst_pid]
+        for t in self._tracklets.values():
+            if t.player == src_pid:
+                t.player = dst_pid
+                self._move_reads(t, dst_pid)
+        for number, count in list(src.votes.counts.items()):  # votos de tracklets que ya no existen
+            dst.votes.counts[number] += count
+            dst.votes.conf_sum[number] += src.votes.conf_sum[number]
+        dst.gallery.extend(src.gallery)
+        dst.seen = sorted(dst.seen + src.seen)
+        if src.last_frame >= dst.last_frame:
+            dst.center, dst.height, dst.last_frame, dst.vel = src.center, src.height, src.last_frame, src.vel
+            dst.tracklet, dst.state, dst.after_cut = src.tracklet, src.state, src.after_cut
+        del self._identities[src_pid]
+        for d in (self._partners, self._since_sep, self._episode_start):
+            d.pop(src_pid, None)
+        for partners in self._partners.values():
+            if src_pid in partners:
+                partners.discard(src_pid)
+                partners.add(dst_pid)
+        self._merges.append((src_pid, dst_pid, frame))

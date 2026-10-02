@@ -43,6 +43,7 @@ class TeamClassifier:
         teams: dict[str, TeamColors],
         max_dist: float = 45.0,
         ambiguity_margin: float = 10.0,
+        libero_number_tolerance: float = 2.0,
         side_memory: int = 90,
         side_margin: float = 0.02,
         min_evidence: int = 4,
@@ -53,6 +54,7 @@ class TeamClassifier:
     ) -> None:
         self._officials = [np.array(o, dtype=np.float64) for o in officials]
         self.max_dist, self.ambiguity_margin = max_dist, ambiguity_margin
+        self.libero_number_tolerance = libero_number_tolerance
         self.side_memory, self.side_margin = side_memory, side_margin
         # evidencia de lado (fracciones del alto del frame): mínimo de apoyos, dispersión máxima (IQR) para
         # considerarla compacta, separación mínima entre equipos y distancia mínima fuera de la franja
@@ -65,14 +67,24 @@ class TeamClassifier:
             self._protos.append((team, False, np.array(colors.main, dtype=np.float64)))
             if colors.libero is not None:
                 self._protos.append((team, True, np.array(colors.libero, dtype=np.float64)))
+        self._libero_numbers: dict[Team, set[int]] = {
+            Team(key): set(colors.libero_numbers) for key, colors in teams.items()
+        }
         self._frame = 0
         self._side: dict[Team, deque[tuple[int, float]]] = {t: deque() for t in Team}
 
-    def classify(self, frame: NDArray[np.uint8], boxes: Sequence[Box]) -> list[Team | None]:
+    def classify(
+        self,
+        frame: NDArray[np.uint8],
+        boxes: Sequence[Box],
+        numbers: Sequence[int | None] | None = None,
+    ) -> list[Team | None]:
+        """Equipo por caja. `numbers` (opcional): número leído por caja, para el líbero (SPEC-003 RF-6)."""
         self._frame += 1
         h = frame.shape[0]
         result: list[Team | None] = [None] * len(boxes)
         ambiguous: list[tuple[int, set[tuple[Team, bool]]]] = []
+        dist_of: dict[int, dict[tuple[Team, bool], float]] = {}
         for k, box in enumerate(boxes):
             lab = torso_lab(frame, box)
             if lab is None:
@@ -88,6 +100,7 @@ class TeamClassifier:
                 self._side[team].append((self._frame, box[3]))
             else:
                 ambiguous.append((k, close))
+                dist_of[k] = {(t, lib): d for d, t, lib in dists}
         self._forget()
         # caso tratable: el color es el principal de un equipo (X = other) y el líbero del otro (Y = owner)
         pairs: dict[int, tuple[Team, Team]] = {}
@@ -121,6 +134,19 @@ class TeamClassifier:
                 for k, other, _ in cands:
                     if k != keep:
                         result[k] = other
+        # SPEC-003 RF-6: un número de líbero leído decide el equipo cuando el color es ambiguo (prevalece
+        # sobre la prior por cantidad y sobre la posición), solo si el torso está al menos tan cerca del
+        # líbero dueño del número como del principal del rival: el rival puede tener ese número (K2: #5)
+        if numbers is not None:
+            for k, (owner, other) in pairs.items():
+                n = numbers[k] if k < len(numbers) else None
+                d = dist_of[k]
+                if (
+                    n is not None
+                    and n in self._libero_numbers.get(owner, set())
+                    and d[(owner, True)] <= d[(other, False)] + self.libero_number_tolerance
+                ):
+                    result[k] = owner
         return result
 
     def _band(self, team: Team, h: float) -> tuple[float, float, float] | None:

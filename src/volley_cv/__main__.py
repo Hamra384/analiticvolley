@@ -23,6 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--end")
     run.add_argument("--out", help="directorio de salida (default: <datos>/outputs/<clip>)")
     run.add_argument("--no-video", action="store_true", help="no escribir debug.mp4")
+    run.add_argument("--no-jersey", action="store_true", help="no leer números de camiseta (SPEC-003)")
     run.add_argument("--weights", default="yolov8m.pt", help="pesos YOLO relativos al directorio de datos")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -37,6 +38,7 @@ def _run(args: argparse.Namespace) -> int:
     from volley_cv.adapters import ByteTrackTracker, YoloPersonDetector
     from volley_cv.appearance import ColorHistEmbedder
     from volley_cv.court import CourtMask
+    from volley_cv.jersey_reader import EasyOcrJerseyReader
     from volley_cv.pipeline import Pipeline
     from volley_cv.team import TeamClassifier
     from volley_cv.video.source import probe, read_frames
@@ -71,6 +73,7 @@ def _run(args: argparse.Namespace) -> int:
         court=CourtMask(vcfg.court, vcfg.exclude_regions),
         teams=TeamClassifier(vcfg.teams, officials=vcfg.officials),
         play_margin=vcfg.play_margin,
+        jersey_reader=None if args.no_jersey else EasyOcrJerseyReader(),  # SPIKE-004: conf >= 0,95
     )
     summary = pipe.run(read_frames(path, start, end), out_dir, fps=info.fps, write_video=not args.no_video)
     print(
@@ -79,6 +82,7 @@ def _run(args: argparse.Namespace) -> int:
                 "frames": summary.frames,
                 "fps": round(summary.fps, 2),
                 "cuts": summary.cuts,
+                "merges": len(pipe.manager.merges),
                 "jsonl": str(summary.jsonl),
                 "video": str(summary.video) if summary.video else None,
             },

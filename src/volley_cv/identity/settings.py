@@ -48,3 +48,4 @@ class IdentityConfig:
     jersey_min_reads: int = 3
     jersey_min_conf: float = 0.8
     jersey_min_share: float = 0.7
+    jersey_split_reads: int = 3  # lecturas consecutivas de otro número que parten el tracklet (SPEC-003 RF-5)

@@ -20,6 +20,7 @@ ml = [
     "ultralytics==8.4.53",
     "onnxruntime>=1.19",
     "boxmot>=25.0.0",
+    "easyocr>=1.7",
 ]
 
 [dependency-groups]
