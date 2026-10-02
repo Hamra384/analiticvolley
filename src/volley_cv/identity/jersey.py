@@ -18,6 +18,16 @@ class JerseyVotes:
         self.counts[read.number] += 1
         self.conf_sum[read.number] += read.confidence
 
+    def remove(self, read: JerseyRead) -> None:
+        """Revierte una lectura atribuida a esta identidad por error (re-vinculación de tracklets)."""
+        if self.counts.get(read.number, 0) <= 0:
+            return
+        self.counts[read.number] -= 1
+        self.conf_sum[read.number] -= read.confidence
+        if self.counts[read.number] == 0:
+            del self.counts[read.number]
+            del self.conf_sum[read.number]
+
     def candidate(self, cfg: IdentityConfig) -> tuple[int, float, float] | None:
         """(número, confianza media, evidencia) si cumple los umbrales; si no, None."""
         if not self.counts:

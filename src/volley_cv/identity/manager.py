@@ -62,7 +62,10 @@ class _Tracklet:
     far_count: int = 0
     team_mismatch: int = 0
     recent: list[Vec] = field(default_factory=list)
-    reads: list[JerseyRead] = field(default_factory=list)
+    # cada lectura recuerda a qué identidad se le sumó (None = a ninguna), para no contarla dos veces
+    reads: list[tuple[JerseyRead, str | None, int]] = field(
+        default_factory=list
+    )  # (lectura, sumada a, frame)
     player: str | None = None
     wait: int = 0
 
@@ -74,7 +77,7 @@ class _Tracklet:
         return None if rest and rest[0][1] == n else top
 
     def confident_read(self, min_conf: float) -> int | None:
-        good = [r for r in self.reads if r.confidence >= min_conf]
+        good = [r for r, _, _ in self.reads if r.confidence >= min_conf]
         if not good:
             return None
         return Counter(r.number for r in good).most_common(1)[0][0]
@@ -113,6 +116,7 @@ class IdentityManager:
         self._next_number: Counter[Team] = Counter()
         self._partners: dict[str, set[str]] = {}
         self._since_sep: dict[str, int] = {}
+        self._episode_start: dict[str, int] = {}  # frame en que la identidad entró a su superposición actual
 
     # ── API pública ──────────────────────────────────────────────────────────────
     def update(self, frame: int, observations: Sequence[Observation]) -> FrameOutput:
@@ -121,7 +125,13 @@ class IdentityManager:
         self._last_frame = frame
         cfg = self.config
 
-        obs = [o for o in observations if o.bbox[2] > o.bbox[0] and o.bbox[3] > o.bbox[1]]
+        valid = [o for o in observations if o.bbox[2] > o.bbox[0] and o.bbox[3] > o.bbox[1]]
+        # track_id duplicado en el frame: se conserva la de mayor confianza (la primera si empatan)
+        best: dict[int, Observation] = {}
+        for o in valid:
+            if o.track_id not in best or o.confidence > best[o.track_id].confidence:
+                best[o.track_id] = o
+        obs = [o for o in valid if best[o.track_id] is o]
         embs: list[Vec | None] = [None if o.embedding is None else _unit(o.embedding) for o in obs]
         overlapping = self._overlaps(obs)
 
@@ -133,28 +143,38 @@ class IdentityManager:
 
         self._resolve_separations(observed, overlapping, frame)
 
-        # tracklets con identidad: actualizan su identidad
+        # tracklets con identidad: actualizan su identidad. Si el equipo observado contradice al de la
+        # identidad (intercambio del tracker entre equipos) no se emite ni se actualiza.
+        contradicted: set[int] = set()
         for t, o, i in observed:
-            if t.player is not None:
-                self._update_identity(self._identities[t.player], t, o, embs[i], i in overlapping, frame)
+            if t.player is None:
+                continue
+            idn = self._identities[t.player]
+            if o.team is not None and o.team != idn.team:
+                contradicted.add(i)
+                continue
+            self._update_identity(idn, t, o, embs[i], i in overlapping, frame)
 
         # tracklets sin identidad: asociación o creación
         unassigned = [(t, o, i) for t, o, i in observed if t.player is None and t.team is not None]
         self._associate(unassigned, embs, frame, frame_state)
 
         # estados de identidades no observadas
-        observed_pids = {t.player for t, _, _ in observed if t.player is not None}
+        observed_pids = {t.player for t, _, i in observed if t.player is not None and i not in contradicted}
         for idn in self._identities.values():
             if idn.pid in observed_pids:
                 continue
             missed = frame - idn.last_frame
-            idn.state = PlayerState.OCCLUDED if missed <= cfg.lost_after else PlayerState.LOST
+            if idn.after_cut or missed > cfg.lost_after:
+                idn.state = PlayerState.LOST
+            else:
+                idn.state = PlayerState.OCCLUDED
 
         self._resolve_jerseys()
 
         players = []
-        for t, o, _ in observed:
-            if t.player is None:
+        for t, o, i in observed:
+            if t.player is None or i in contradicted:
                 continue
             idn = self._identities[t.player]
             state = frame_state.get(idn.pid, idn.state)
@@ -188,6 +208,7 @@ class IdentityManager:
         self._raw_to_key.clear()
         self._partners.clear()
         self._since_sep.clear()
+        self._episode_start.clear()
         for idn in self._identities.values():
             idn.tracklet = None
             idn.state = PlayerState.LOST
@@ -234,7 +255,7 @@ class IdentityManager:
             elif not overlap and t.far_count == 0:
                 t.ref = _unit(cfg.ref_ema * t.ref + (1 - cfg.ref_ema) * emb)
         if o.jersey is not None:
-            t.reads.append(o.jersey)
+            t.reads.append((o.jersey, t.player, frame))
             if t.player is not None:
                 self._identities[t.player].votes.add(o.jersey)
         return t
@@ -266,70 +287,110 @@ class IdentityManager:
     def _resolve_separations(
         self, observed: list[tuple[_Tracklet, Observation, int]], overlapping: dict[int, set[int]], frame: int
     ) -> None:
+        """RF-6b por grupo: el grupo es la componente conexa de las identidades que se superpusieron entre sí
+        (en cadena). La ventana de resolución se abre recién cuando **ningún** miembro sigue superpuesto, y
+        vence por frames absolutos (no deja compañeros viejos colgados)."""
         cfg = self.config
         pid_of = {i: t.player for t, _, i in observed}
-        # acumular compañeros de superposición
+        overlapping_pids: set[str] = set()
         for i, others in overlapping.items():
             pi = pid_of.get(i)
             if pi is None:
                 continue
+            overlapping_pids.add(pi)
             for j in others:
                 pj = pid_of.get(j)
                 if pj is not None:
                     self._partners.setdefault(pi, set()).add(pj)
-            self._since_sep.pop(pi, None)
-        # identidades separadas recientemente
+                    self._partners.setdefault(pj, set()).add(pi)
+                    self._episode_start.setdefault(pi, frame)
+                    self._episode_start.setdefault(pj, frame)
         free: dict[str, tuple[_Tracklet, int]] = {
             t.player: (t, i) for t, _, i in observed if t.player is not None and i not in overlapping
         }
-        window: set[str] = set()
-        for pid in list(self._partners):
-            if pid not in free:
-                continue
-            self._since_sep[pid] = self._since_sep.get(pid, 0) + 1
-            if self._since_sep[pid] > cfg.separation_frames:
-                self._partners.pop(pid, None)
-                self._since_sep.pop(pid, None)
-            else:
-                window.add(pid)
-        # componentes conexas entre identidades en ventana de separación
+        held: dict[str, _Tracklet] = {t.player: t for t, _, _ in observed if t.player is not None}
         seen: set[str] = set()
-        for start in sorted(window):
+        for start in sorted(self._partners):
             if start in seen:
                 continue
-            comp, stack = set(), [start]
+            comp: set[str] = set()
+            stack = [start]
             while stack:
                 p = stack.pop()
                 if p in comp:
                     continue
                 comp.add(p)
-                stack.extend(q for q in self._partners.get(p, ()) if q in window and q not in comp)
+                stack.extend(q for q in self._partners.get(p, ()) if q not in comp)
             seen |= comp
-            if len(comp) >= 2:
-                self._reassign_group(sorted(comp), free)
+            if comp & overlapping_pids:
+                for p in comp:
+                    self._since_sep[p] = 0
+            else:
+                since = max(self._since_sep.get(p, 0) for p in comp) + 1
+                if since > cfg.separation_frames:
+                    for p in comp:
+                        self._partners.pop(p, None)
+                        self._since_sep.pop(p, None)
+                        self._episode_start.pop(p, None)
+                    continue
+                for p in comp:
+                    self._since_sep[p] = since
+            # los miembros ya libres se resuelven en cada frame, aunque otros del grupo sigan superpuestos
+            if any(p in free for p in comp):
+                episode = min(self._episode_start.get(p, frame) for p in comp)
+                self._reassign_group(sorted(comp), free, held, episode)
 
-    def _reassign_group(self, pids: list[str], free: dict[str, tuple[_Tracklet, int]]) -> None:
+    def _reassign_group(
+        self,
+        comp: list[str],
+        free: dict[str, tuple[_Tracklet, int]],
+        held: dict[str, _Tracklet],
+        episode_start: int,
+    ) -> None:
+        """Reasigna identidades del grupo a sus tracklets libres por apariencia (galería previa) y equipo.
+
+        Un tracklet libre puede tomar la identidad que tiene un tracklet todavía superpuesto; en ese caso
+        el superpuesto recibe la identidad que el libre dejó, sin evaluar su apariencia contaminada.
+        Solo se re-atribuyen las lecturas de dorsal tomadas desde el inicio de la superposición.
+        """
         cfg = self.config
-        tracklets = [free[p][0] for p in pids]
-        cost = np.full((len(tracklets), len(pids)), INF)
+        fixed = [p for p in comp if p in free]  # identidades cuyo tracklet está libre
+        pool = [p for p in comp if p in held]  # identidades en juego (tracklet observado este frame)
+        tracklets = [free[p][0] for p in fixed]
+        cost = np.full((len(tracklets), len(pool)), INF)
         for a, t in enumerate(tracklets):
-            for b, pid in enumerate(pids):
+            for b, pid in enumerate(pool):
+                own = pid == fixed[a]
                 idn = self._identities[pid]
                 g = idn.gallery_mean()
+                # equipo observado en este frame como condición dura; si es desconocido, el tracklet solo
+                # puede conservar su identidad actual (no se reasigna a ciegas)
+                if t.last_team is None and not own:
+                    continue
                 if t.last_team is not None and t.last_team != idn.team:
                     continue
                 if g is not None and t.last_emb is not None:
                     cost[a, b] = _cos_dist(t.last_emb, g)
-        current = sum(cost[a, a] for a in range(len(pids)))
+                elif own:
+                    cost[a, b] = 0.5
+        current = sum(cost[a, pool.index(fixed[a])] for a in range(len(fixed)))
         rows, cols = linear_sum_assignment(cost)
         best = float(cost[rows, cols].sum())
         if current - best <= cfg.swap_margin or best >= INF:
             return
-        for a, b in zip(rows, cols, strict=True):
-            t, pid = tracklets[a], pids[b]
+        new_ids = {fixed[a]: pool[b] for a, b in zip(rows, cols, strict=True)}
+        released = sorted(set(fixed) - set(new_ids.values()))
+        taken = sorted(set(new_ids.values()) - set(fixed))  # estaban en tracklets superpuestos
+        if len(released) != len(taken):
+            return
+        assignments = [(free[old][0], new) for old, new in new_ids.items()]
+        assignments += [(held[pid], rel) for pid, rel in zip(taken, released, strict=True)]
+        for t, pid in assignments:
             t.player = pid
             self._identities[pid].tracklet = t.key
-            t.ref, t.far_count, t.recent = t.last_emb, 0, []
+            self._move_reads(t, pid, since=episode_start)
+            if t.last_emb is not None and any(t is free[p][0] for p in fixed):
+                t.ref, t.far_count, t.recent = t.last_emb, 0, []
 
     # ── identidades ──────────────────────────────────────────────────────────────
     def _update_identity(
@@ -390,6 +451,8 @@ class IdentityManager:
         ]
         cost = np.full((len(unassigned), len(candidates)), INF)
         for a, (t, _, _) in enumerate(unassigned):
+            if t.ref is None and t.obs_count < cfg.reid_min_obs_without_embedding:
+                continue  # sin apariencia, 1-2 detecciones no alcanzan para re-identificar (hallazgo 4)
             for b, idn in enumerate(candidates):
                 if idn.team == t.team:
                     cost[a, b] = self._cost(t, idn, frame)
@@ -397,15 +460,17 @@ class IdentityManager:
         if candidates:
             rows, cols = linear_sum_assignment(cost)
             for a, b in zip(rows, cols, strict=True):
-                if cost[a, b] < cfg.accept_cost:
-                    t, o, i = unassigned[a]
-                    idn = candidates[b]
-                    self._link(t, idn)
-                    self._update_identity(idn, t, o, embs[i], False, frame)
-                    frame_state[idn.pid] = PlayerState.REIDENTIFIED
-                    matched.add(a)
+                t, o, i = unassigned[a]
+                if cost[a, b] >= cfg.accept_cost or t.player is not None:
+                    continue
+                idn = candidates[b]
+                continuous = frame - idn.last_frame <= 1 and not idn.after_cut  # cambio de track sin hueco
+                self._link(t, idn)
+                self._update_identity(idn, t, o, embs[i], False, frame)
+                frame_state[idn.pid] = PlayerState.TRACKED if continuous else PlayerState.REIDENTIFIED
+                matched.add(a)
         for a, (t, o, i) in enumerate(unassigned):
-            if a in matched or t.obs_count < cfg.confirm_frames:
+            if a in matched or t.player is not None or t.obs_count < cfg.confirm_frames:
                 continue
             team = t.team
             assert team is not None
@@ -450,8 +515,23 @@ class IdentityManager:
                 old.player = None
         t.player = idn.pid
         idn.tracklet = t.key
-        for r in t.reads:
-            idn.votes.add(r)
+        # solo se suman las lecturas que no se atribuyeron a nadie; las ya atribuidas a otra identidad eran de
+        # la persona que el tracklet observaba en ese momento
+        self._move_reads(t, idn.pid, only_unattributed=True)
+
+    def _move_reads(self, t: _Tracklet, pid: str, since: int = -1, only_unattributed: bool = False) -> None:
+        """Atribuye a `pid` las lecturas del tracklet desde el frame `since`, revirtiendo las sumadas antes a
+        otra identidad (corrección de un intercambio)."""
+        moved = []
+        for read, counted_for, f in t.reads:
+            if f < since or counted_for == pid or (only_unattributed and counted_for is not None):
+                moved.append((read, counted_for, f))
+                continue
+            if counted_for is not None and counted_for in self._identities:
+                self._identities[counted_for].votes.remove(read)
+            self._identities[pid].votes.add(read)
+            moved.append((read, pid, f))
+        t.reads = moved
 
     def _resolve_jerseys(self) -> None:
         for team in Team:

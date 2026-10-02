@@ -22,6 +22,7 @@ class IdentityConfig:
     radius_growth_h: float = 0.2  # crecimiento del radio por frame perdido
     max_radius_h: float = 6.0
     long_gap_frames: int = 90  # tras este hueco el movimiento deja de restringir (solo apariencia)
+    reid_min_obs_without_embedding: int = 3  # sin apariencia, un tracklet de 1-2 frames no re-identifica
     jersey_bonus: float = 0.25
     jersey_penalty: float = 0.5
 

@@ -1,1 +1,1 @@
-﻿"""Esquemas de salida."""
+"""Esquemas de salida."""

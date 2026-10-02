@@ -52,7 +52,10 @@ def test_without_embeddings_motion_alone_reidentifies_nearby_return() -> None:
     outs += feed(mgr, range(25, 40), lambda f: [obs(2, 300 + 2 * f, emb=None)])
     ids = {p.player_id for o in outs for p in o.players}  # type: ignore[attr-defined]
     assert ids == {"TEAM_A_PLAYER_01"}
-    assert outs[25].players[0].state == "REIDENTIFIED"  # type: ignore[attr-defined]
+    # sin apariencia, la Re-ID exige reid_min_obs_without_embedding observaciones (hallazgo 4 del reviewer)
+    k = IdentityConfig().reid_min_obs_without_embedding
+    assert all(outs[f].players == [] for f in range(25, 25 + k - 1))  # type: ignore[attr-defined]
+    assert outs[25 + k - 1].players[0].state == "REIDENTIFIED"  # type: ignore[attr-defined]
 
 
 def test_far_return_without_embedding_is_not_forced_onto_old_identity() -> None:

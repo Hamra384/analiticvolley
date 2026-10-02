@@ -30,15 +30,24 @@ número de camiseta, y número como metadata.
   identidad), movimiento (distancia a la posición predicha, normalizada por un radio que crece con el tiempo
   perdido, con tope por velocidad máxima), dorsal (bonificación si coincide con confianza; penalización si
   contradice; nunca veto absoluto) y equipo (condición dura).
+- RF-4b (revisión S3): sin embedding de apariencia, un tracklet necesita ≥ `reid_min_obs_without_embedding`
+  observaciones para re-identificar (una detección espuria aislada no toma una identidad oculta). Un cambio de
+  track sin hueco (la identidad se observó en el frame anterior) se reporta `TRACKED`, no `REIDENTIFIED`.
+- RF-4c (revisión S3): si el equipo observado contradice al de la identidad del tracklet, esa caja no se emite ni
+  actualiza la identidad en ese frame. Un `track_id` repetido en el mismo frame: se conserva la observación de
+  mayor confianza.
 - RF-5: Partición de tracklets: si la apariencia de un tracklet se aleja de su referencia por encima de
   `split_distance` durante `split_frames` frames consecutivos, o su equipo cambia de forma sostenida, el tracklet
   se parte y el fragmento nuevo pasa por RF-3/RF-4.
 - RF-6: Durante una superposición (IoU entre cajas de identidades vigentes > `overlap_iou`), no se actualiza la
   galería de apariencia de esas identidades.
-- RF-6b: Resolución de la separación: durante los `separation_frames` frames posteriores a que un grupo superpuesto
-  se separa, se recalcula la asignación tracklet ↔ identidad **dentro del grupo** por apariencia (galería previa a
-  la superposición) y equipo; si la asignación óptima difiere de la vigente por más de `swap_margin`, se
-  reasignan (corrige el intercambio del tracker en el cruce sin esperar a la partición).
+- RF-6b: Resolución de la separación. El grupo es la componente conexa de identidades que se superpusieron entre
+  sí (en cadena). En cada frame, los tracklets **ya libres** del grupo se reasignan por apariencia (galería previa a
+  la superposición) y equipo entre las identidades del grupo en juego; si un libre toma la identidad de un tracklet
+  aún superpuesto, ese recibe la que el libre dejó. Se aplica si mejora el costo en más de `swap_margin`. El grupo
+  vence `separation_frames` frames después de que ningún miembro está superpuesto. Al reasignar, solo se
+  re-atribuyen las lecturas de dorsal tomadas desde el inicio de la superposición. (Revisión S3: la versión
+  anterior, con ventana por identidad, dejaba intercambios persistentes en cadenas de 3 jugadores.)
 - RF-7: Dorsal por votación a nivel identidad: se asigna solo con ≥ `jersey_min_reads` lecturas, confianza media
   ≥ `jersey_min_conf` y ≥ `jersey_min_share` del voto total. Unicidad por equipo (no global). Si dos identidades del
   mismo equipo reclaman un número, lo conserva la de mayor evidencia y la otra queda en `null`.
@@ -100,9 +109,11 @@ Las identidades `OCCLUDED`/`LOST` no aparecen en la salida del frame (no hay caj
 ## Limitación conocida (medida)
 Si el tracker intercambia IDs **al empezar** una superposición, la salida muestra el intercambio mientras dure la
 superposición y se corrige al separarse (RF-6b); durante la superposición las apariencias están contaminadas y no se
-usan a propósito. En el escenario AC-11 (12 jugadores, intercambios aleatorios) esto afecta < 5 % de los frames y
-deja 0 errores persistentes. Mejora posible (fuera de alcance): detectar la inversión brusca de velocidad del
-tracklet durante la superposición.
+usan a propósito. Medición (corregida tras la revisión independiente, que mostró que la primera medición se había
+hecho con una sola semilla): en el escenario AC-11 con 15 combinaciones de disposición × semilla
+(`test_finding1_ac11_holds_across_seeds`), 12 identidades exactas, 0 errores fuera de las ventanas de
+superposición y < 5 % de frames con error transitorio en todas. Mejora posible (fuera de alcance): detectar la
+inversión brusca de velocidad del tracklet durante la superposición.
 
 ## Restricciones técnicas
 Python 3.12, numpy, scipy (`linear_sum_assignment`), pydantic. Paquete `volley_cv.identity`. Tipado estricto (mypy).

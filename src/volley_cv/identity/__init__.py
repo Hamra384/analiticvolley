@@ -1,4 +1,4 @@
-﻿"""Identidad persistente de jugadores (SPEC-001)."""
+"""Identidad persistente de jugadores (SPEC-001)."""
 
 from volley_cv.identity.manager import IdentityManager
 from volley_cv.identity.settings import IdentityConfig
