@@ -25,7 +25,7 @@ officials:
 
 # libero_numbers (SPEC-003 RF-6): con prototipos idénticos (blanco de Japón = líbero argentino) el número decide
 # solo. Verificar que el rival no tenga un jugador con ese número (en K2 Japón tiene un #5 = líbero coreano).
-# Pendiente: confirmar con el plantel que Japón no tiene un #19 (revisión S5a M4).
+# Verificado por el usuario (2026-10-02): Japón no tiene un #19 en este partido (revisión S5a M4).
 teams:
   A:
     name: Japón

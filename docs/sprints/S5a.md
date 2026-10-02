@@ -46,7 +46,7 @@ en rojo observados antes de cada corrección):
 - **M3** el número recordado podía arrastrarse si el tracker pasaba el ID a otra persona → se olvida en una
   superposición (IoU > 0,3).
 - **M4** (configuración) con colores idénticos (blanco de Japón = líbero argentino) el número de líbero decide solo:
-  si Japón tuviera un #19, se iría a Argentina. Documentado en la config; **no verificado** con el plantel.
+  si Japón tuviera un #19, se iría a Argentina. Documentado en la config; el usuario confirmó que Japón no tiene #19 en este partido.
 - Bajos: socios de superposición simétricos tras fusión (corregido), test de AC-5 más estricto (corregido).
 
 ## Pruebas
@@ -68,7 +68,7 @@ en rojo observados antes de cada corrección):
   track es nuevo, bajar el mínimo de lecturas para fusionar solo si no hay conflicto, o un lector con más cobertura.
   Sin anotaciones no se puede medir el costo en precisión.
 - Siguen: identidades que mezclan personas en la red (#14), oficiales de traje y gráficos (#15), velocidad (#16).
-- Los planteles no están verificados (M4).
+- Sin planteles en la config, un líbero y un rival con el mismo número y el mismo color se confunden (M4). En JPN-ARG no ocurre (verificado).
 
 ## Próximo
 
