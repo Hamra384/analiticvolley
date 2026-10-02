@@ -117,9 +117,11 @@ class TeamClassifier:
             if len(feet) >= 3:
                 fallback[pair] = float(np.median(feet))
         as_libero: dict[Team, list[tuple[int, Team, float]]] = {}
+        rival_meds: dict[int, float | None] = {}
         for k, (owner, other) in pairs.items():
             rival = self._band(other, h)
             rival_med = rival[0] if rival else fallback.get((owner, other))
+            rival_meds[k] = rival_med
             result[k] = self._by_side(boxes[k][3], owner, other, h, rival_med)
             if result[k] == owner:
                 as_libero.setdefault(owner, []).append(
@@ -135,8 +137,9 @@ class TeamClassifier:
                     if k != keep:
                         result[k] = other
         # SPEC-003 RF-6: un número de líbero leído decide el equipo cuando el color es ambiguo (prevalece
-        # sobre la prior por cantidad y sobre la posición), solo si el torso está al menos tan cerca del
-        # líbero dueño del número como del principal del rival: el rival puede tener ese número (K2: #5)
+        # sobre la prior por cantidad), solo si el torso está al menos tan cerca del líbero dueño del número
+        # como del principal del rival (RF-6c) y la persona no está del lado del rival (RF-6d): el rival puede
+        # tener un jugador con ese número (K2: #5 de Japón y líbero coreano #5)
         if numbers is not None:
             for k, (owner, other) in pairs.items():
                 n = numbers[k] if k < len(numbers) else None
@@ -145,6 +148,7 @@ class TeamClassifier:
                     n is not None
                     and n in self._libero_numbers.get(owner, set())
                     and d[(owner, True)] <= d[(other, False)] + self.libero_number_tolerance
+                    and not self._on_rival_side(boxes[k][3], owner, h, rival_meds[k])
                 ):
                     result[k] = owner
         return result
@@ -182,6 +186,14 @@ class TeamClassifier:
             return owner if abs(feet - med) < abs(feet - rival_med) else other
         beyond_own_side = (feet - med) * (med - rival_med) > 0
         return owner if beyond_own_side else other
+
+    def _on_rival_side(self, feet: float, owner: Team, h: float, rival_med: float | None) -> bool:
+        """SPEC-003 RF-6d: True si hay evidencia de lado de ambos equipos, separada, y los pies están
+        más cerca del rival que de `owner`. Sin evidencia (plano lateral) no se puede afirmar: False."""
+        own = self._band(owner, h)
+        if own is None or rival_med is None or abs(rival_med - own[0]) < self.min_separation * h:
+            return False
+        return abs(feet - rival_med) < abs(feet - own[0])
 
     def _forget(self) -> None:
         for q in self._side.values():

@@ -42,6 +42,11 @@ y la posición en la imagen no alcanza para el líbero. El número de camiseta e
 - RF-6c (agregado en la revisión visual de K2): RF-6 aplica solo si el torso está al menos tan cerca del líbero
   dueño del número como del color principal del rival (tolerancia 2). Evidencia: Japón tiene un #5 real (rojo) y
   el líbero coreano es el #5 (azul marino); con RF-6b un rojo en sombra quedaba en Corea.
+- RF-6d (pedido del usuario, sin plantel): RF-6 tampoco aplica si la persona está del lado del rival: con evidencia
+  de lado de ambos equipos (separada al menos `min_separation`), los pies más cerca de la mediana del rival que de
+  la del dueño del número. Cubre colores idénticos (blanco de Japón = líbero argentino) con un rival que lleve el
+  número del líbero. Sin evidencia de lado (plano lateral) decide el número. Límite conocido: cerca de la red la
+  posición es menos confiable.
 
 ## Requerimientos no funcionales
 - RNF-1: la lectura no debe bajar el FPS de punta a punta más de un 40 % (se reporta).
@@ -67,6 +72,7 @@ y la posición en la imagen no alcanza para el líbero. El número de camiseta e
 - [ ] AC-11: dado un track con un número leído una vez, cuando siguen los frames sin lectura, entonces el clasificador de equipo recibe ese número en cada frame hasta un corte.
 - [ ] AC-12: dado un torso ambiguo pero más cerca del principal del rival que del líbero dueño del número leído, cuando se clasifica, entonces el número no cambia el equipo.
 - [ ] AC-13 (revisión S5a): dado una fusión X → Y, cuando el tracker revive el tracklet viejo de Y junto al de X, entonces ningún frame tiene `player_id` duplicado (un solo tracklet vinculado por identidad) y una fusión en el frame de creación se reporta `REIDENTIFIED`, no `DETECTED`.
+- [ ] AC-14: dado un torso del color ambiguo con el número del líbero de Y, cuando la persona está del lado del rival de Y, entonces el número no decide (queda en el equipo del rival); del lado de Y, es de Y.
 - [ ] AC-8: dado una lectura con confianza < `min_conf` o con más de 2 dígitos, cuando la procesa el lector easyocr, entonces no se emite (test con OCR falso).
 - [ ] AC-9: dado los clips A2, A3, K2 y K5 reales, cuando corre el pipeline, entonces la revisión visual muestra menos líberos en el equipo contrario e identidades fusionadas por número (evidencia manual en el informe).
 
@@ -86,7 +92,7 @@ Sin impacto: no hay datos personales (los números son públicos en la transmisi
 |---|---|
 | AC-1…AC-3, AC-5, AC-13 | escenarios de identidad (`tests/scenarios/test_jersey_identity.py`) |
 | AC-4 | unit de reescritura (`tests/unit/test_s5a_units.py`) e integración (`tests/integration/test_jersey_pipeline.py`) |
-| AC-6, AC-12 | unit de equipo (`tests/unit/test_s5a_units.py`) |
+| AC-6, AC-12, AC-14 | unit de equipo (`tests/unit/test_s5a_units.py`) |
 | AC-7, AC-10, AC-11 | integración del pipeline con lector falso (`tests/integration/test_jersey_pipeline.py`) |
 | AC-8 | unit del lector con OCR falso (`tests/unit/test_s5a_units.py`) |
 | AC-9 | revisión visual manual |

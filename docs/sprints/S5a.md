@@ -34,6 +34,14 @@
 - Velocidad: A2 5,1 FPS, A3 5,1, K2 8,6, K5 8,5 (antes de S5a: A2 5,8, K2 9,7). Costo del OCR ≈ 10–12 %; entre
   corridas del mismo clip varió entre 4,4 y 5,4 FPS en A2, así que la cifra es aproximada.
 
+### Líbero y rival con el mismo número (pedido del usuario, sin plantel)
+
+Si el color del líbero de un equipo es igual al principal del otro (blanco en JPN-ARG) y un rival lleva el número
+del líbero, el número solo no alcanza. RF-6d: el número no decide si la persona está **del lado del rival** según la
+evidencia de lado del tramo; sin evidencia (plano lateral) decide el número. Re-corrida de los 4 clips: A2, A3 y K5
+idénticos (el #19 de A3 sigue en Argentina, 480 frames); en K2, B05 queda coreano todo el tramo y A09 (#5 de Japón)
+sube de 246 a 282 frames. Límite: cerca de la red la posición es menos confiable.
+
 ## Revisión independiente (subagente reviewer)
 
 1 hallazgo alto y 4 medios. Todos se corrigieron con un test de regresión, salvo M4, que quedó documentado (tests
@@ -51,10 +59,10 @@ en rojo observados antes de cada corrección):
 
 ## Pruebas
 
-- 322 tests locales (0 salteados); ruff, format y mypy limpios; cobertura 98,3 % (base 98,4 %, dentro de la
+- 324 tests locales (0 salteados); ruff, format y mypy limpios; cobertura 98,3 % (base 98,4 %, dentro de la
   tolerancia). CI: ver PR.
 - Criterios agregados durante el sprint por evidencia del video: RF-2b/AC-10 (oclusión), RF-6b/AC-11 (número
-  recordado), RF-6c/AC-12 (color compatible), AC-13 (revisión).
+  recordado), RF-6c/AC-12 (color compatible), RF-6d/AC-14 (lado del rival), AC-13 (revisión).
 
 ## Errores míos en este sprint
 
@@ -68,7 +76,7 @@ en rojo observados antes de cada corrección):
   track es nuevo, bajar el mínimo de lecturas para fusionar solo si no hay conflicto, o un lector con más cobertura.
   Sin anotaciones no se puede medir el costo en precisión.
 - Siguen: identidades que mezclan personas en la red (#14), oficiales de traje y gráficos (#15), velocidad (#16).
-- Sin planteles en la config, un líbero y un rival con el mismo número y el mismo color se confunden (M4). En JPN-ARG no ocurre (verificado).
+- Líbero y rival con el mismo número y el mismo color: cubierto por posición (RF-6d) salvo cerca de la red o sin evidencia de lado. En JPN-ARG no ocurre (verificado por el usuario).
 
 ## Próximo
 

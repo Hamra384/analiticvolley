@@ -87,6 +87,27 @@ def test_ac6_libero_number_does_not_override_unambiguous_color() -> None:
     assert TeamClassifier(TEAMS_NUM).classify(frame, boxes, numbers=[37]) == [Team.B]
 
 
+def _arg_court(white_19: tuple[float, float]) -> list[tuple[tuple[int, int, int], float, float]]:
+    """Argentina (oscuros) lejos, pies ~y 230-270; Japón (blancos) cerca, ~y 560-640; un blanco con #19."""
+    players = [(DARK, 200 + 150 * i, 230 + 10 * i) for i in range(5)]
+    players += [(WHITE, 100 + 150 * i, 560 + 20 * i) for i in range(5)]
+    return [*players, (WHITE, *white_19)]
+
+
+def test_ac14_libero_number_on_the_rival_side_does_not_decide() -> None:
+    # un japonés de blanco con el mismo número que el líbero argentino, del lado de Japón: sigue siendo Japón
+    frame, boxes = draw(_arg_court((1100, 600)))
+    teams = TeamClassifier(TEAMS_NUM).classify(frame, boxes, numbers=[None] * 10 + [19])
+    assert teams[10] == Team.A
+
+
+def test_ac14_libero_number_on_own_side_decides() -> None:
+    # el mismo blanco con #19 del lado argentino (zona de fondo, donde juega el líbero): Argentina
+    frame, boxes = draw(_arg_court((1100, 200)))
+    teams = TeamClassifier(TEAMS_NUM).classify(frame, boxes, numbers=[None] * 10 + [19])
+    assert teams[10] == Team.B
+
+
 # Como jpn_kor_2026: Japón rojo; el líbero coreano (#5) azul marino. Japón también tiene un #5 (K2 real)
 RED_K, NAVY = (72, 164, 131), (50, 135, 114)
 TEAMS_K = {
