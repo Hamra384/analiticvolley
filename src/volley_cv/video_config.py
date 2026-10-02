@@ -29,6 +29,7 @@ class TeamColors(BaseModel):
     name: str
     main: Lab
     libero: Lab | None = None
+    libero_numbers: list[int] = Field(default_factory=list)  # SPEC-003 RF-6
 
 
 class VideoConfig(BaseModel):

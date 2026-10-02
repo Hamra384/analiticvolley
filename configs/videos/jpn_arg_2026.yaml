@@ -23,12 +23,17 @@ officials:
   # visual de S4.1 heredó la identidad de un jugador. El líbero rojo #37 queda más cerca de su propio prototipo.
   - [126, 150, 153]
 
+# libero_numbers (SPEC-003 RF-6): con prototipos idénticos (blanco de Japón = líbero argentino) el número decide
+# solo. Verificar que el rival no tenga un jugador con ese número (en K2 Japón tiene un #5 = líbero coreano).
+# Verificado por el usuario (2026-10-02): Japón no tiene un #19 en este partido (revisión S5a M4).
 teams:
   A:
     name: Japón
     main: [190, 130, 128]     # camiseta blanca
     libero: [126, 162, 150]   # líbero rojo #37
+    libero_numbers: [37]   # SPEC-003 RF-6: el número decide líbero aunque el color sea ambiguo
   B:
     name: Argentina
     main: [60, 130, 124]      # camiseta azul marino / negra
     libero: [190, 130, 128]   # líbero blanco #19: ambiguo con el principal de A -> se resuelve por lado
+    libero_numbers: [19]   # SPEC-003 RF-6: el número decide líbero aunque el color sea ambiguo

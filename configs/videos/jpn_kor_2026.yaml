@@ -23,7 +23,9 @@ teams:
     name: Japón
     main: [72, 164, 131]      # camiseta roja
     libero: [170, 132, 122]   # líbero blanco #1: ambiguo con el principal de B -> se resuelve por lado
+    libero_numbers: [1]   # SPEC-003 RF-6: el número decide líbero aunque el color sea ambiguo
   B:
     name: Corea
     main: [170, 132, 122]     # camiseta blanca
     libero: [50, 135, 114]    # líbero azul oscuro #5
+    libero_numbers: [5]   # SPEC-003 RF-6: el número decide líbero aunque el color sea ambiguo
