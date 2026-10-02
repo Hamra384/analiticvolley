@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 from volley_cv.config import PROJECT_ROOT, ConfigError, load_clips, load_settings, parse_timestamp
 
@@ -42,6 +42,9 @@ def _run(args: argparse.Namespace) -> int:
     from volley_cv.video_config import load_video_config
 
     data = load_settings().data_dir
+    _check_relative(args.weights, "--weights")
+    if args.video:
+        _check_relative(args.video, "--video")
     if args.clip:
         catalog = load_clips(PROJECT_ROOT / "configs" / "eval" / "clips.yaml")
         clip = next((c for c in catalog.clips if c.id == args.clip), None)
@@ -54,6 +57,8 @@ def _run(args: argparse.Namespace) -> int:
             raise ConfigError("--video requiere --video-config y --end")
         path, video_id = data / args.video, args.video_config
         start, end = parse_timestamp(args.start), parse_timestamp(args.end)
+        if end <= start:
+            raise ConfigError(f"el inicio ({args.start}) debe ser anterior al fin ({args.end})")
         name = f"{Path(args.video).stem}_{int(start)}_{int(end)}"
     vcfg = load_video_config(video_id)
     info = probe(path)
@@ -79,6 +84,13 @@ def _run(args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+def _check_relative(value: str, flag: str) -> None:
+    """Las rutas de datos son relativas al directorio de datos y no pueden salir de él."""
+    p = PurePath(value.replace("\\", "/"))
+    if PureWindowsPath(value).drive or PurePosixPath(value).is_absolute() or ".." in p.parts:
+        raise ConfigError(f"{flag} debe ser una ruta relativa al directorio de datos (sin '..'): {value}")
 
 
 if __name__ == "__main__":

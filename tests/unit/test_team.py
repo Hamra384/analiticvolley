@@ -34,20 +34,25 @@ def draw(
 
 
 def test_ac3_main_colors_and_unambiguous_libero() -> None:
-    frame, boxes = draw([(WHITE, 100, 600), (DARK, 300, 250), (RED, 500, 620), (GREEN, 700, 600)])
+    darks = [(DARK, 300 + 120 * i, 250 + 8 * i) for i in range(4)]  # evidencia de lado de B (>= 4 apoyos)
+    frame, boxes = draw([(WHITE, 100, 600), *darks, (RED, 500, 620), (GREEN, 900, 600)])
     teams = TeamClassifier(TEAMS).classify(frame, boxes)
-    assert teams[1] == Team.B  # azul oscuro = B
-    assert teams[2] == Team.A  # rojo = líbero de A
-    assert teams[3] is None  # color lejano a todos
-    # el blanco es ambiguo (A principal / líbero B) y en este frame no hay evidencia suficiente de lado de B
-    # más allá de un solo jugador: se resuelve igual porque está lejos del lado de B (ver AC-4)
+    assert teams[1:5] == [Team.B] * 4  # azul oscuro = B
+    assert teams[5] == Team.A  # rojo = líbero de A
+    assert teams[6] is None  # color lejano a todos
+    # el blanco es ambiguo (A principal / líbero B): está claramente fuera de la franja de B -> A (ver AC-4)
     assert teams[0] == Team.A
+
+
+def test_ac3_single_rival_player_is_not_enough_side_evidence() -> None:
+    frame, boxes = draw([(WHITE, 100, 600), (DARK, 300, 250)])
+    assert TeamClassifier(TEAMS).classify(frame, boxes)[0] is None
 
 
 def test_ac4_ambiguous_white_resolved_by_side_of_dark_team() -> None:
     # B (oscuros) del lado lejano (pies ~ y 230-280); un blanco entre ellos = líbero de B; blancos abajo = A
     players = [(DARK, 200 + 150 * i, 230 + 10 * i) for i in range(5)]
-    players += [(WHITE, 640, 260)]  # blanco del lado de B
+    players += [(WHITE, 1100, 250)]  # blanco del lado de B (sin superponerse a ningún oscuro)
     players += [(WHITE, 200 + 150 * i, 560 + 20 * i) for i in range(5)]  # blancos del lado cercano
     frame, boxes = draw(players)
     teams = TeamClassifier(TEAMS).classify(frame, boxes)

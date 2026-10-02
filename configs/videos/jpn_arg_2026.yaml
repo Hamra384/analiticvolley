@@ -5,8 +5,10 @@
 court:
   # piso naranja de la cancha (pico de tono 10); la zona libre es verde/turquesa
   hsv_ranges:
-    - lower: [3, 25, 80]
-      upper: [18, 255, 255]
+    # revisión S4: el rango anterior [3,25,80]-[18,255,255] dejaba afuera la esquina cercana derecha (reflejo,
+    # menor saturación); verificado visualmente en A2 frame 9:15 que este rango cubre la cancha completa
+    - lower: [2, 10, 60]
+      upper: [20, 255, 255]
   margin_px: 25
 exclude_regions:
   # marcador sobreimpreso (fracciones del frame: x1, y1, x2, y2)

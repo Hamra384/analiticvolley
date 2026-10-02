@@ -41,6 +41,7 @@ class DebugRenderer:
     def __init__(self, options: DebugOptions | None = None) -> None:
         self.options = options or DebugOptions()
         self._trails: dict[str, deque[tuple[int, int]]] = {}
+        self._last_seen: dict[str, int] = {}
 
     def draw(self, frame: NDArray[np.uint8], out: FrameOutput, cut: bool = False) -> NDArray[np.uint8]:
         o = self.options
@@ -50,6 +51,9 @@ class DebugRenderer:
             x1, y1, x2, y2 = (round(v) for v in p.bbox)
             feet = ((x1 + x2) // 2, y2)
             trail = self._trails.setdefault(p.player_id, deque(maxlen=o.trail_frames))
+            if out.frame - self._last_seen.get(p.player_id, out.frame - 1) > 1:
+                trail.clear()  # desapareció: no unir la posición vieja con la nueva
+            self._last_seen[p.player_id] = out.frame
             trail.append(feet)
             if o.trails and len(trail) > 1:
                 cv2.polylines(img, [np.array(trail, dtype=np.int32)], False, color, 2, cv2.LINE_AA)
@@ -79,3 +83,4 @@ class DebugRenderer:
     def reset(self) -> None:
         """Corte: se borran las trayectorias."""
         self._trails.clear()
+        self._last_seen.clear()

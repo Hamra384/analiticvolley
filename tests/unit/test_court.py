@@ -59,8 +59,9 @@ def test_disconnected_court_colored_blobs_are_ignored() -> None:
 def test_white_court_lines_do_not_split_the_court() -> None:
     """Las líneas de ataque/centro (blancas, finas) no deben dejar zonas de la cancha afuera."""
     frame = frame_with_court()
-    frame[150:156, 80:320] = (255, 255, 255)  # línea de ataque
-    frame[200:206, 80:320] = (255, 255, 255)  # línea central
+    # 3 px a 300 px de alto ~ 10 px a 1080p (las líneas reales miden 6-10 px a 1080p)
+    frame[150:153, 80:320] = (255, 255, 255)  # línea de ataque
+    frame[200:203, 80:320] = (255, 255, 255)  # línea central
     zones = [(150.0, 100.0, 170.0, 140.0), (150.0, 120.0, 170.0, 180.0), (150.0, 160.0, 170.0, 260.0)]
     assert CourtMask(COURT).in_court(frame, zones) == [True, True, True]
 

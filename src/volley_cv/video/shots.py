@@ -11,8 +11,10 @@ from numpy.typing import NDArray
 
 
 class ShotDetector:
-    def __init__(self, ratio: float = 6.0, min_diff: float = 3.0, window: int = 61) -> None:
-        self.ratio, self.min_diff, self.window = ratio, min_diff, window
+    def __init__(
+        self, ratio: float = 6.0, min_diff: float = 3.0, window: int = 61, first_diff: float = 15.0
+    ) -> None:
+        self.ratio, self.min_diff, self.window, self.first_diff = ratio, min_diff, window, first_diff
         self._prev: NDArray[np.int16] | None = None
         self._history: deque[float] = deque(maxlen=window)
 
@@ -24,8 +26,12 @@ class ShotDetector:
         if prev is None:
             return False
         diff = float(np.abs(gray - prev).mean())
-        baseline = float(np.median(self._history)) if self._history else diff
+        first = not self._history
+        baseline = float(np.median(self._history)) if self._history else 0.0
         self._history.append(diff)
+        if first:
+            # 2.º frame, sin historia para comparar: solo un cambio de escena evidente cuenta como corte
+            return diff > self.first_diff
         return diff > self.min_diff and diff > self.ratio * max(baseline, 0.5)
 
     def reset(self) -> None:

@@ -64,27 +64,29 @@ class Pipeline:
         cuts: list[int] = []
         n = 0
         t0 = time.perf_counter()
-        with jsonl.open("w", encoding="utf-8") as f:
-            for idx, frame in frames:
-                cut = self.shots.update(frame) if n > 0 else False
-                if cut:
-                    cuts.append(idx)
-                    self.manager.reset()
-                    self.tracker.reset()
-                    self.teams.reset()
-                    self.renderer.reset()
-                out = self.manager.update(idx, self._observations(frame))
-                f.write(out.model_dump_json() + "\n")
-                if video_path is not None:
-                    if writer is None:
-                        h, w = frame.shape[:2]
-                        writer = cv2.VideoWriter(
-                            str(video_path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (w, h)
-                        )
-                    writer.write(self.renderer.draw(frame, out, cut))
-                n += 1
-        if writer is not None:
-            writer.release()
+        try:
+            with jsonl.open("w", encoding="utf-8") as f:
+                for idx, frame in frames:
+                    cut = self.shots.update(frame)  # el primer frame nunca es corte
+                    if cut:
+                        cuts.append(idx)
+                        self.manager.reset()
+                        self.tracker.reset()
+                        self.teams.reset()
+                        self.renderer.reset()
+                    out = self.manager.update(idx, self._observations(frame))
+                    f.write(out.model_dump_json() + "\n")
+                    if video_path is not None:
+                        if writer is None:
+                            h, w = frame.shape[:2]
+                            writer = cv2.VideoWriter(
+                                str(video_path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (w, h)
+                            )
+                        writer.write(self.renderer.draw(frame, out, cut))
+                    n += 1
+        finally:
+            if writer is not None:
+                writer.release()  # el video queda legible aunque el proceso falle a mitad del clip
         elapsed = time.perf_counter() - t0
         summary = RunSummary(n, cuts, n / elapsed if elapsed > 0 else 0.0, jsonl, video_path)
         log.info("procesados %d frames a %.1f FPS; cortes: %s", n, summary.fps, cuts)

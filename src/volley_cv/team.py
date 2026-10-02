@@ -44,10 +44,18 @@ class TeamClassifier:
         max_dist: float = 45.0,
         ambiguity_margin: float = 10.0,
         side_memory: int = 90,
-        side_margin: float = 0.04,
+        side_margin: float = 0.02,
+        min_evidence: int = 4,
+        max_spread: float = 0.30,
+        min_separation: float = 0.08,
+        clear_gap: float = 0.05,
     ) -> None:
         self.max_dist, self.ambiguity_margin = max_dist, ambiguity_margin
         self.side_memory, self.side_margin = side_memory, side_margin
+        # evidencia de lado (fracciones del alto del frame): mínimo de apoyos, dispersión máxima (IQR) para
+        # considerarla compacta, separación mínima entre equipos y distancia mínima fuera de la franja
+        self.min_evidence, self.max_spread = min_evidence, max_spread
+        self.min_separation, self.clear_gap = min_separation, clear_gap
         # (equipo, es_libero, color Lab)
         self._protos: list[tuple[Team, bool, NDArray[np.float64]]] = []
         for key, colors in sorted(teams.items()):
@@ -79,23 +87,53 @@ class TeamClassifier:
             else:
                 ambiguous.append((k, close))
         self._forget()
-        margin = self.side_margin * h
         for k, close in ambiguous:
-            # caso tratable: el color es el principal de un equipo (X) y el líbero del otro (Y). Decide la
-            # franja de Y (de sus jugadores no ambiguos): dentro -> líbero de Y; fuera -> X. Sin evidencia de
-            # Y, o cualquier otra combinación ambigua -> desconocido.
+            # caso tratable: el color es el principal de un equipo (X) y el líbero del otro (Y)
             liberos = {t for t, lib in close if lib}
             mains = {t for t, lib in close if not lib}
             if len(liberos) != 1 or len(mains - liberos) != 1:
                 continue
             (owner,) = liberos
             (other,) = mains - liberos
-            ys = [y for _, y in self._side[owner]]
-            if not ys:
-                continue
-            lo, hi = min(ys) - margin, max(ys) + margin
-            result[k] = owner if lo <= boxes[k][3] <= hi else other
+            result[k] = self._by_side(boxes[k][3], owner, other, h)
         return result
+
+    def _band(self, team: Team, h: float) -> tuple[float, float, float] | None:
+        """(mediana, límite inferior, límite superior) robustos del apoyo de `team` en el tramo, o None si la
+        evidencia no alcanza o no es compacta (p. ej. plano lateral: el equipo ocupa toda la altura)."""
+        ys = [y for _, y in self._side[team]]
+        if len(ys) < self.min_evidence:
+            return None
+        q1, med, q3 = (float(v) for v in np.percentile(ys, [25, 50, 75]))
+        if q3 - q1 > self.max_spread * h:
+            return None
+        half = max((q3 - q1) / 2, self.side_margin * h)
+        return med, med - half - self.side_margin * h, med + half + self.side_margin * h
+
+    def _by_side(self, feet: float, owner: Team, other: Team, h: float) -> Team | None:
+        """Equipo de un color ambiguo (principal de `other` = líbero de `owner`) según el lado en el tramo.
+
+        Conservador: ante cualquier duda devuelve None (un equipo equivocado es peor que desconocido).
+        """
+        own = self._band(owner, h)
+        if own is None:
+            return None
+        med, lo, hi = own
+        rival = self._band(other, h)
+        if rival is not None:
+            if abs(rival[0] - med) < self.min_separation * h:
+                return None  # los lados no están separados en la imagen
+            d_own, d_rival = abs(feet - med), abs(feet - rival[0])
+            if lo <= feet <= hi and d_own < d_rival:
+                return owner
+            if not lo <= feet <= hi and d_rival < d_own:
+                return other
+            return None
+        if lo <= feet <= hi:
+            # sin evidencia del otro equipo, solo el centro de la franja es suficientemente seguro
+            return owner if abs(feet - med) <= (hi - lo) / 4 else None
+        gap = (lo - feet) if feet < lo else (feet - hi)
+        return other if gap >= self.clear_gap * h else None
 
     def _forget(self) -> None:
         for q in self._side.values():

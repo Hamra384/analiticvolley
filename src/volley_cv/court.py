@@ -24,7 +24,6 @@ class CourtMask:
         self.exclude_regions = list(exclude_regions)
         m = court.margin_px
         self._kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * m + 1, 2 * m + 1)) if m > 0 else None
-        self._close = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
 
     def mask(self, frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -39,7 +38,9 @@ class CourtMask:
             excluded[int(y1 * h) : int(np.ceil(y2 * h)), int(x1 * w) : int(np.ceil(x2 * w))] = 1
         out[excluded == 1] = 0
         # las líneas blancas (ataque, centro) parten el piso en zonas: se cierran antes de la componente
-        out = np.asarray(cv2.morphologyEx(out, cv2.MORPH_CLOSE, self._close), dtype=np.uint8)
+        k = max(5, round(15 * h / 1080))  # escala con la resolución (15 px a 1080p)
+        close = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
+        out = np.asarray(cv2.morphologyEx(out, cv2.MORPH_CLOSE, close), dtype=np.uint8)
         # la cancha es la mancha conexa más grande: se descartan público, sillas, carteles del mismo color
         n, labels, stats, _ = cv2.connectedComponentsWithStats(out, connectivity=8)
         if n > 1:
