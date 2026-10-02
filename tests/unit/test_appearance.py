@@ -1,6 +1,7 @@
 """Descriptor de apariencia por histograma de color (SPIKE-003: mejor AUC que ResNet18 y OSNet en A2/K2)."""
 
 import numpy as np
+
 from volley_cv.appearance import ColorHistEmbedder
 
 

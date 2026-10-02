@@ -71,6 +71,10 @@ extend-exclude = ["legacy"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
+[tool.ruff.lint.isort]
+# explícito: sin esto, local y CI clasificaban distinto `volley_cv` (local: terceros; CI: propio)
+known-first-party = ["volley_cv", "spikes", "tools", "tests"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
