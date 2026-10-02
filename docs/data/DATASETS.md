@@ -21,6 +21,18 @@ Antes de incorporar una fuente nueva se agrega una fila con fuente, licencia, us
 | SVHN | torchvision | Uso no comercial (Stanford) | Entrenamiento de `digit_classifier.onnx` (legacy) | JerseyReader (a evaluar en S5) | Legacy |
 | *(pendiente)* dataset público de pelota de vóley | — | Revisar antes de usar | Fine-tuning del detector de pelota | BallDetector | Se evalúa en el spike de S2 |
 
+## Modelos preentrenados y librerías de terceros (S2)
+
+| Recurso | Fuente | Licencia | Uso | Dónde vive |
+|---|---|---|---|---|
+| YOLOv8m / YOLOv8l (COCO) | Ultralytics | AGPL-3.0 (pesos y librería); anotaciones COCO CC BY 4.0 | Detección de personas y pelota (spikes, pre-anotación) | `<data>/yolov8*.pt` |
+| boxmot 25.0 | PyPI (mikel-brostrom/boxmot) | AGPL-3.0 | Trackers del SPIKE-001 | extra `ml` |
+| OSNet x0.25 (MSMT17) | boxmot (descarga automática) | Pesos entrenados sobre MSMT17, dataset con licencia de **uso no comercial para investigación** | Re-ID en SPIKE-001 (T3/T4; ninguno fue elegido) | `<data>/weights/` |
+| CVAT 2.77.1 | github.com/cvat-ai/cvat | MIT | Herramienta de anotación local (Docker) | `D:\AIVolley\cvat` (fuera del repo) |
+
+Nota: el proyecto ya es AGPL-compatible por depender de Ultralytics; el repo es público. Si en algún momento se
+quisiera uso comercial, hay que revisar Ultralytics/boxmot (licencia comercial) y no usar pesos MSMT17.
+
 ## Anotaciones
 
 Ground truth de los 10 clips de `configs/eval/clips.yaml`: se pre-anotan automáticamente y el usuario las corrige

@@ -51,6 +51,8 @@ Donde no se ve (tapada o fuera de cuadro), marcá el track como **outside** (tec
 
 ## Atajos útiles
 
+(Si algún atajo no responde, la misma acción está en el menú contextual de la caja, clic derecho.)
+
 | Tecla | Acción |
 |---|---|
 | `F` / `D` | frame siguiente / anterior |
