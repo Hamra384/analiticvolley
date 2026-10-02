@@ -1,0 +1,19 @@
+name: Bug
+description: Comportamiento incorrecto observado
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: observado
+    attributes: {label: "Qué pasa (con evidencia: clip, frame, salida)"}
+    validations: {required: true}
+  - type: textarea
+    id: esperado
+    attributes: {label: Qué debería pasar}
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes: {label: Cómo reproducir (comando, clip, commit)}
+    validations: {required: true}
+  - type: textarea
+    id: test
+    attributes: {label: Test de regresión propuesto}

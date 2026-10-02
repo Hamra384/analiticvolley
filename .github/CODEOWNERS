@@ -1,0 +1,8 @@
+# Controles del harness: cambios requieren revisión del dueño.
+# Nota: el agente opera con la cuenta del dueño, así que GitHub no puede exigir una revisión distinta
+# del autor. La protección efectiva es: hook guard_edit (pide aprobación) + branch protection (PR + CI).
+/.claude/                 @Hamra384
+/.github/                 @Hamra384
+/scripts/check_*.py       @Hamra384
+/quality/                 @Hamra384
+/CLAUDE.md                @Hamra384

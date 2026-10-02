@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_FROZEN: "1"   # el lockfile manda: falla si uv.lock no coincide con pyproject
+
+jobs:
+  lint:
+    name: lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  test:
+    name: tests (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: sudo apt-get update -q && sudo apt-get install -y -q libgl1
+      - run: uv sync
+      - name: pytest
+        run: uv run pytest --junitxml=junit.xml --cov --cov-report=xml --cov-report=term
+      - name: verificar qué se ejecutó
+        if: always()
+        run: uv run python scripts/check_tests_ran.py junit.xml --min-tests 100
+      - name: trinquete de cobertura
+        run: uv run python scripts/check_coverage_ratchet.py coverage.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            junit.xml
+            coverage.xml
+
+  harness-windows:
+    name: tests del harness (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run pytest tests/harness --junitxml=junit.xml
+      - if: always()
+        run: uv run python scripts/check_tests_ran.py junit.xml --min-tests 100
+
+  security:
+    name: seguridad (medios, secretos, dependencias)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: sin videos ni datos en el repo
+        run: python3 scripts/check_no_media.py
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: pip-audit (dependencias core + dev)
+        run: |
+          uv export --format requirements-txt --no-hashes --no-emit-project > requirements-audit.txt
+          uvx pip-audit -r requirements-audit.txt
+
+  docs:
+    name: specs y documentación
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_spec.py
+
+  traceability:
+    name: trazabilidad PR → Issue → Spec
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+      - run: python3 scripts/check_traceability.py changed.txt
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}

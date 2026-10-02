@@ -1,0 +1,84 @@
+# Catálogo de clips de evaluación del MVP 1.
+# Rutas relativas al directorio de datos (VOLLEY_DATA_DIR / configs/local.yaml).
+# Los videos NO se versionan (repo público). Fuente y licencia: docs/data/DATASETS.md
+# Selección: auditoría S2-pre (2026-10-01): escaneo automático + verificación visual con tiras de 8 frames.
+# Todos los clips caen dentro de un único tramo sin cortes de edición (detector calibrado).
+
+videos:
+  jpn_arg_2026:
+    file: videos/external/jpn_arg_2026.mp4
+    source: https://www.youtube.com/watch?v=oFMjaZ_z3X8
+    resolution: 1920x1080@30
+    notes: Edición solo-rallies (198 cortes). Cámara de cabecera con paneo. Líbero rojo (equipo blanco) y blanco #19 (equipo oscuro).
+  jpn_kor_2026:
+    file: videos/external/jpn_kor_2026.mp4
+    source: https://www.youtube.com/watch?v=dgU-3rkwf4Q
+    resolution: 1280x720@30
+    notes: Edición solo-rallies (185 cortes). Líbero oscuro en equipo blanco.
+
+clips:
+  - id: A1
+    video: jpn_arg_2026
+    start: "15:21"
+    duration_s: 20
+    scenarios: [tracking_normal, camera_pan, numbers_visible, numbers_invisible]
+    verified: true
+    notes: Jugador #33 fuera de cancha abajo a la derecha; posible sustitución, sin confirmar.
+  - id: A2
+    video: jpn_arg_2026
+    start: "9:05"
+    duration_s: 20
+    scenarios: [overlap, occlusion, ball_near_net, celebration_cluster]
+    verified: true
+  - id: A3
+    video: jpn_arg_2026
+    start: "35:18"
+    duration_s: 20
+    scenarios: [overlap, libero, ball_near_net]
+    verified: true
+  - id: A4
+    video: jpn_arg_2026
+    start: "34:56"
+    duration_s: 20
+    scenarios: [numbers_visible, occlusion]
+    verified: true
+  - id: A5
+    video: jpn_arg_2026
+    start: "16:55"
+    duration_s: 20
+    scenarios: [libero, overlap, out_of_frame]
+    verified: true
+  - id: K1
+    video: jpn_kor_2026
+    start: "21:28"
+    duration_s: 20
+    scenarios: [ball_fast, ball_near_net, libero]
+    verified: true
+  - id: K2
+    video: jpn_kor_2026
+    start: "30:49"
+    duration_s: 20
+    scenarios: [celebration_cluster, overlap, tracking_normal]
+    verified: true
+    notes: Tramo continuo entre dos rallies (el marcador cambia sin corte).
+  - id: K3
+    video: jpn_kor_2026
+    start: "24:34"
+    duration_s: 20
+    scenarios: [ball_near_net, overlap]
+    verified: true
+    notes: Inicio de set, bloqueo triple.
+  - id: K4
+    video: jpn_kor_2026
+    start: "11:20"
+    duration_s: 20
+    scenarios: [out_of_frame, new_player]
+    verified: true
+    notes: Jugador sale por el borde inferior y otro entra; posible sustitución, sin confirmar.
+  - id: K5
+    video: jpn_kor_2026
+    start: "9:14"
+    duration_s: 20
+    scenarios: [ball_fast, overlap]
+    verified: false
+    notes: Seleccionado solo por escaneo automático; falta verificación visual.
