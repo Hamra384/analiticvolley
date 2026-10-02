@@ -203,7 +203,7 @@ class IdentityManager:
             else:
                 idn.state = PlayerState.OCCLUDED
 
-        self._resolve_jerseys(frame)
+        self._resolve_jerseys(frame, frame_state)
 
         players = []
         for t, o, i in observed:
@@ -618,7 +618,7 @@ class IdentityManager:
             moved.append((read, pid, f))
         t.reads = moved
 
-    def _resolve_jerseys(self, frame: int) -> None:
+    def _resolve_jerseys(self, frame: int, frame_state: dict[str, PlayerState]) -> None:
         for team in Team:
             cands = {
                 pid: idn.votes.candidate(self.config)
@@ -635,32 +635,59 @@ class IdentityManager:
                 target = ordered[0]
                 for other in ordered[1:]:
                     if not self._identities[other].coexisted_with(self._identities[target]):
-                        self._merge(other, target, frame)
+                        self._merge(other, target, frame, frame_state)
                         cands.pop(other, None)
                         cands[target] = self._identities[target].votes.candidate(self.config)
             for pid, res in resolve_team_conflicts(cands).items():
                 self._identities[pid].jersey = res
 
-    def _merge(self, src_pid: str, dst_pid: str, frame: int) -> None:
+    def _merge(
+        self, src_pid: str, dst_pid: str, frame: int, frame_state: dict[str, PlayerState] | None = None
+    ) -> None:
         """Fusiona la identidad `src` en `dst` (más antigua): tracklets, votos, galería y estado."""
         src, dst = self._identities[src_pid], self._identities[dst_pid]
+        newer = src.last_frame >= dst.last_frame
+        keep = src.tracklet if newer else dst.tracklet
         for t in self._tracklets.values():
+            if t.player not in (src_pid, dst_pid):
+                continue
             if t.player == src_pid:
-                t.player = dst_pid
-                self._move_reads(t, dst_pid)
+                # solo las lecturas atribuidas a `src`: las de otra identidad (corrección de un intercambio)
+                # siguen siendo de esa otra (revisión S5a M2)
+                moved = []
+                for read, counted_for, f in t.reads:
+                    if counted_for == src_pid:
+                        src.votes.remove(read)
+                        dst.votes.add(read)
+                        counted_for = dst_pid
+                    moved.append((read, counted_for, f))
+                t.reads = moved
+            # un solo tracklet vinculado a la identidad: el más reciente (revisión S5a H1); si el tracker
+            # revive otro, pasa por la asociación como cualquier tracklet sin identidad
+            t.player = dst_pid if t.key == keep else None
         for number, count in list(src.votes.counts.items()):  # votos de tracklets que ya no existen
             dst.votes.counts[number] += count
             dst.votes.conf_sum[number] += src.votes.conf_sum[number]
         dst.gallery.extend(src.gallery)
         dst.seen = sorted(dst.seen + src.seen)
-        if src.last_frame >= dst.last_frame:
+        if newer:
             dst.center, dst.height, dst.last_frame, dst.vel = src.center, src.height, src.last_frame, src.vel
-            dst.tracklet, dst.state, dst.after_cut = src.tracklet, src.state, src.after_cut
+            dst.state, dst.after_cut = src.state, src.after_cut
+        dst.tracklet = keep
+        # volver a ver a alguien conocido es una re-identificación, no una detección nueva (revisión S5a M1)
+        if dst.state == PlayerState.DETECTED:
+            dst.state = PlayerState.REIDENTIFIED
+        if frame_state is not None and src_pid in frame_state:
+            frame_state.pop(src_pid)
+            frame_state[dst_pid] = PlayerState.REIDENTIFIED
         del self._identities[src_pid]
-        for d in (self._partners, self._since_sep, self._episode_start):
+        src_partners = self._partners.pop(src_pid, set())
+        for d in (self._since_sep, self._episode_start):
             d.pop(src_pid, None)
         for partners in self._partners.values():
             if src_pid in partners:
                 partners.discard(src_pid)
                 partners.add(dst_pid)
+        if src_partners - {dst_pid}:  # simétrico (revisión S5a B1)
+            self._partners.setdefault(dst_pid, set()).update(src_partners - {dst_pid})
         self._merges.append((src_pid, dst_pid, frame))

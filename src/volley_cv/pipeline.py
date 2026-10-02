@@ -51,11 +51,13 @@ class Pipeline:
         read_min_height: float = 0.18,
         read_stride: int = 5,
         read_max_occlusion: float = 0.15,
+        forget_iou: float = 0.3,
     ) -> None:
         self.play_margin = play_margin
         self.jersey_reader = jersey_reader
         self.read_min_height, self.read_stride = read_min_height, read_stride
         self.read_max_occlusion = read_max_occlusion
+        self.forget_iou = forget_iou
         self._frame_i = 0
         self._last_read: dict[int, int] = {}  # track_id -> último frame leído (SPEC-003 RF-2)
         self._track_number: dict[int, int] = {}  # track_id -> último número leído (SPEC-003 RF-6b)
@@ -135,13 +137,7 @@ class Pipeline:
         boxes = [(float(t[0]), float(t[1]), float(t[2]), float(t[3])) for t in tracks]
         in_court = feet_in(court_mask, boxes)
         reads = self._read_numbers(frame, tracks, boxes)
-        # RF-6b: para el equipo vale el último número leído del track, no solo el del frame (el OCR lee pocas
-        # veces; entre lecturas el color ambiguo de un líbero lo mandaba al rival)
-        for t, r in zip(tracks, reads, strict=True):
-            if r is not None:
-                self._track_number[int(t[4])] = r.number
-        numbers = [self._track_number.get(int(t[4])) for t in tracks]
-        teams = self.teams.classify(frame, boxes, numbers=numbers)
+        teams = self.teams.classify(frame, boxes, numbers=self._team_numbers(tracks, boxes, reads))
         embs = self.embedder.embed(frame, boxes)
         return [
             Observation(
@@ -157,6 +153,23 @@ class Pipeline:
                 tracks, boxes, teams, embs, reads, in_court, strict=True
             )
         ]
+
+    def _team_numbers(
+        self,
+        tracks: NDArray[np.float32],
+        boxes: list[tuple[float, float, float, float]],
+        reads: list[JerseyRead | None],
+    ) -> list[int | None]:
+        """SPEC-003 RF-6b: para el equipo vale el último número leído del track, no solo el del frame (el OCR
+        lee pocas veces; entre lecturas el color ambiguo de un líbero lo mandaba al rival). Se olvida en una
+        superposición, donde el tracker puede pasar el ID a otra persona (revisión S5a M3)."""
+        for k, (t, r) in enumerate(zip(tracks, reads, strict=True)):
+            tid = int(t[4])
+            if r is not None:
+                self._track_number[tid] = r.number
+            elif any(_iou(boxes[k], o) > self.forget_iou for j, o in enumerate(boxes) if j != k):
+                self._track_number.pop(tid, None)
+        return [self._track_number.get(int(t[4])) for t in tracks]
 
     def _read_numbers(
         self,
@@ -203,3 +216,12 @@ def _torso_occlusion(
         if w > 0 and h > 0:
             worst = max(worst, w * h / area)
     return worst
+
+
+def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    if w <= 0 or h <= 0:
+        return 0.0
+    inter = w * h
+    return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter)

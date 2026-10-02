@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from volley_cv.identity import IdentityConfig, IdentityManager, JerseyRead, Observation, Team
+from volley_cv.identity import IdentityConfig, IdentityManager, JerseyRead, Observation, PlayerState, Team
 
 E = np.eye(16, dtype=np.float32)
 CFG = IdentityConfig()
@@ -73,10 +73,9 @@ def test_ac5_number_change_on_same_track_splits_tracklet() -> None:
     # el tracker pasa a otro jugador con la misma apariencia de color (compañero), que lleva el 11
     outs = [mgr.update(f, [obs(1, 800, 0, number=11)]) for f in range(20, 40)]
     assert outs[-1].players[0].track_id.startswith("track_1.")
-    states = mgr.identity_states()
     first = mgr._identities["TEAM_A_PLAYER_01"]
-    assert first.votes.counts.get(11, 0) < CFG.jersey_split_reads  # el 11 no se acumuló en la identidad del 7
-    assert len(states) >= 1
+    assert first.votes.counts.get(11, 0) == 0  # el 11 no se sumó a la identidad del 7
+    assert first.jersey is not None and first.jersey[0] == 7
 
 
 def test_ac4_merge_carries_orphan_votes_and_overlap_partners() -> None:
@@ -98,4 +97,37 @@ def test_ac4_merge_carries_orphan_votes_and_overlap_partners() -> None:
     assert src not in mgr.identity_states()
     assert mgr._identities[dst].votes.counts[7] == 1
     assert mgr._partners["TEAM_B_PLAYER_01"] == {dst}
+    assert mgr._partners[dst] == {"TEAM_B_PLAYER_01"}  # simétrico (revisión S5a B1)
     assert src not in mgr._partners
+
+
+def _merged_after_gap(mgr: IdentityManager, read_every: int) -> tuple[int, list[str]]:
+    """P01 (track 1, #7) desaparece; vuelve como track 2 con otra apariencia y se fusiona por el 7."""
+    for f in range(30):
+        mgr.update(f, [obs(1, 800, 0, number=7 if f % 2 == 0 else None)])
+    back = 30 + CFG.long_gap_frames + 10
+    for f in range(30, back):
+        mgr.update(f, [])
+    ids = []
+    for f in range(back, back + 30):
+        out = mgr.update(f, [obs(2, 300, 3, number=7 if f % read_every == 0 else None)])
+        ids += [p.player_id for p in out.players]
+    assert mgr.merges, "el escenario debe producir la fusión"
+    return back + 30, ids
+
+
+def test_review_h1_merge_leaves_a_single_tracklet_linked_no_duplicate_ids() -> None:
+    mgr = IdentityManager()
+    f, _ = _merged_after_gap(mgr, read_every=2)
+    # el tracker revive el ID viejo (track 1) junto al 2 en el mismo frame
+    out = mgr.update(f, [obs(2, 300, 3), obs(1, 1200, 0)])
+    ids = [p.player_id for p in out.players]
+    assert len(ids) == len(set(ids))
+    assert sum(t.player == "TEAM_A_PLAYER_01" for t in mgr._tracklets.values()) == 1
+
+
+def test_review_m1_merge_at_creation_is_reidentified_then_tracked() -> None:
+    mgr = IdentityManager()
+    _merged_after_gap(mgr, read_every=1)  # lecturas en cada frame: se fusiona en el frame de creación
+    states = [s for s in mgr.identity_states().values()]
+    assert PlayerState.DETECTED not in states

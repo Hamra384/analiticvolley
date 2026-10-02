@@ -159,3 +159,16 @@ def test_ac11_last_read_number_is_kept_for_the_track_until_a_cut(tmp_path: Path)
     pipe.run(((i, make_frame(i)) for i in range(N)), tmp_path, write_video=False)
     assert all(ns[:4] == [7] * 4 for ns in teams.seen[1:CUT_AT])  # recordado entre lecturas (los 4 leídos)
     assert all(7 not in ns for ns in teams.seen[CUT_AT:])  # el corte lo olvida (los tracks son otros)
+
+
+def test_review_m3_overlap_forgets_the_remembered_number() -> None:
+    # en una superposición el tracker puede pasar el ID a otra persona: el número recordado ya no es confiable
+    pipe = _pipe(CountingReader())
+    a, b = (100.0, 50.0, 140.0, 150.0), (300.0, 50.0, 340.0, 150.0)
+    tracks = np.array([[*a, 1, 0.9], [*b, 2, 0.9]], dtype=np.float32)
+    assert pipe._team_numbers(tracks, [a, b], [JerseyRead(19, 0.97), None]) == [19, None]
+    assert pipe._team_numbers(tracks, [a, b], [None, None]) == [19, None]  # recordado
+    near = (105.0, 50.0, 145.0, 150.0)  # se superpone con `a`
+    tracks2 = np.array([[*a, 1, 0.9], [*near, 2, 0.9]], dtype=np.float32)
+    assert pipe._team_numbers(tracks2, [a, near], [None, None]) == [None, None]
+    assert pipe._team_numbers(tracks, [a, b], [None, None]) == [None, None]  # olvidado, no vuelve
