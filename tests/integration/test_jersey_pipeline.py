@@ -130,9 +130,9 @@ class SpyTeams(TeamClassifier):
         super().__init__(TEAMS)
         self.seen: list[list[int | None]] = []
 
-    def classify(self, frame, boxes, numbers=None):  # type: ignore[no-untyped-def]
+    def classify_roles(self, frame, boxes, numbers=None):  # type: ignore[no-untyped-def]
         self.seen.append(list(numbers or []))
-        return super().classify(frame, boxes, numbers)
+        return super().classify_roles(frame, boxes, numbers)
 
 
 class FirstReadOnly(CountingReader):
@@ -172,3 +172,28 @@ def test_review_m3_overlap_forgets_the_remembered_number() -> None:
     tracks2 = np.array([[*a, 1, 0.9], [*near, 2, 0.9]], dtype=np.float32)
     assert pipe._team_numbers(tracks2, [a, near], [None, None]) == [None, None]
     assert pipe._team_numbers(tracks, [a, b], [None, None]) == [None, None]  # olvidado, no vuelve
+
+
+class FirstIsLibero(TeamClassifier):
+    def classify_roles(self, frame, boxes, numbers=None):  # type: ignore[no-untyped-def]
+        out = super().classify_roles(frame, boxes, numbers)
+        return [(team, k == 0) for k, (team, _) in enumerate(out)]
+
+
+class SpyManager(IdentityManager):
+    def __init__(self) -> None:
+        super().__init__()
+        self.liberos: list[bool] = []
+
+    def update(self, frame, observations):  # type: ignore[no-untyped-def]
+        self.liberos += [o.libero for o in observations]
+        return super().update(frame, observations)
+
+
+def test_spec004_role_reaches_the_identity_manager(tmp_path: Path) -> None:
+    mgr = SpyManager()
+    pipe = Pipeline(
+        FakeDetector(), FakeTracker(), FakeEmbedder(), CourtMask(COURT), FirstIsLibero(TEAMS), mgr
+    )
+    pipe.run(((i, make_frame(i)) for i in range(10)), tmp_path, write_video=False)
+    assert True in mgr.liberos and False in mgr.liberos

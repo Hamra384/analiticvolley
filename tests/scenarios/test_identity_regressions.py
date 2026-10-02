@@ -135,7 +135,8 @@ def test_finding5_jersey_votes_not_double_counted_on_relink() -> None:
 
 # Hallazgo 6: tras reset() las identidades siguen LOST y no bloquean el cupo.
 def test_finding6_reset_keeps_lost_and_frees_roster() -> None:
-    mgr = IdentityManager()
+    # semántica sin plantel cerrado; con SPEC-004 (default) el nuevo toma por descarte una identidad LOST
+    mgr = IdentityManager(IdentityConfig(closed_roster=False))
     emb = np.eye(16, dtype=np.float32)
     for f in range(10):
         mgr.update(
