@@ -34,7 +34,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
-    from volley_cv.adapters import ByteTrackTracker, TorchvisionEmbedder, YoloPersonDetector
+    from volley_cv.adapters import ByteTrackTracker, YoloPersonDetector
+    from volley_cv.appearance import ColorHistEmbedder
     from volley_cv.court import CourtMask
     from volley_cv.pipeline import Pipeline
     from volley_cv.team import TeamClassifier
@@ -66,9 +67,10 @@ def _run(args: argparse.Namespace) -> int:
     pipe = Pipeline(
         detector=YoloPersonDetector(data / args.weights),
         tracker=ByteTrackTracker(frame_rate=round(info.fps)),
-        embedder=TorchvisionEmbedder(),
+        embedder=ColorHistEmbedder(),  # SPIKE-003: mejor que ResNet18 y OSNet en clips reales
         court=CourtMask(vcfg.court, vcfg.exclude_regions),
-        teams=TeamClassifier(vcfg.teams),
+        teams=TeamClassifier(vcfg.teams, officials=vcfg.officials),
+        play_margin=vcfg.play_margin,
     )
     summary = pipe.run(read_frames(path, start, end), out_dir, fps=info.fps, write_video=not args.no_video)
     print(

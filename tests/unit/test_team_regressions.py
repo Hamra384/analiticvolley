@@ -1,4 +1,10 @@
-"""Regresiones de la revisión independiente de S4 sobre TeamClassifier (hallazgos 1-4)."""
+"""Regresiones sobre TeamClassifier (revisión S4 y revisión visual S4.1).
+
+Semántica vigente (S4.1, SPEC-002 RF-3d): un color ambiguo (principal de X = líbero de Y) se asigna por
+defecto a X, porque hay ~6 jugadores con ese color principal contra un solo líbero; solo con evidencia fuerte
+de lado se asigna a Y. La versión anterior devolvía "desconocido" en esos casos y, en el video real (A2),
+terminaba creando identidades de Argentina con japoneses blancos (los pocos votos B decidían).
+"""
 
 from volley_cv.identity.types import Team
 from volley_cv.team import TeamClassifier
@@ -15,12 +21,12 @@ KOR = {
 RED_JP = (72, 164, 131)
 
 
-def test_finding1_white_near_net_between_teams_is_unknown_not_rival() -> None:
-    """Oscuros (B) con pies en y 440-500; un blanco en y=525 (bloqueador japonés en la red) no es B."""
+def test_finding1_white_near_net_is_main_team_not_rival() -> None:
+    """Oscuros (B) con pies en y 440-500; un blanco en y=525 (bloqueador japonés en la red) es A, nunca B."""
     players = [(DARK, 200 + 150 * i, 440 + 12 * i) for i in range(6)]
     players += [(WHITE, 640, 525)]
     frame, boxes = draw(players)
-    assert TeamClassifier(TEAMS).classify(frame, boxes)[6] is None
+    assert TeamClassifier(TEAMS).classify(frame, boxes)[6] == Team.A
 
 
 def test_finding1_white_deep_in_rival_court_is_their_libero() -> None:
@@ -49,17 +55,17 @@ def test_finding3_kor_orientation_whites_are_korea_and_white_libero_in_red_band_
     assert teams[6:] == [Team.B] * 5
 
 
-def test_finding3_kor_without_side_evidence_is_unknown() -> None:
+def test_finding3_kor_without_side_evidence_whites_are_korea() -> None:
     frame, boxes = draw([(WHITE, 200 + 200 * i, 250 + 10 * i) for i in range(5)])
-    assert TeamClassifier(KOR).classify(frame, boxes) == [None] * 5
+    assert TeamClassifier(KOR).classify(frame, boxes) == [Team.B] * 5
 
 
-def test_finding4_lateral_view_without_compact_side_is_unknown() -> None:
-    """Plano lateral: los oscuros ocupan toda la altura (separados en x, no en y) -> no se decide por y."""
+def test_finding4_lateral_view_never_assigns_the_libero_team() -> None:
+    """Plano lateral (franjas no compactas): no se usa el lado; el blanco va al equipo de color principal."""
     players = [(DARK, 100 + 60 * i, 150 + 110 * i) for i in range(6)]  # pies de y=150 a y=700
     players += [(WHITE, 900 + 50 * i, 200 + 100 * i) for i in range(5)]
     frame, boxes = draw(players)
-    assert TeamClassifier(TEAMS).classify(frame, boxes)[6:] == [None] * 5
+    assert TeamClassifier(TEAMS).classify(frame, boxes)[6:] == [Team.A] * 5
 
 
 def _both_sides(white_feet: float, a_feet: float = 620.0, b_feet: float = 260.0) -> Team | None:
@@ -79,20 +85,20 @@ def test_both_sides_white_near_own_team_is_own() -> None:
     assert _both_sides(white_feet=640) == Team.A
 
 
-def test_both_sides_white_between_teams_is_unknown() -> None:
-    assert _both_sides(white_feet=440) is None
+def test_both_sides_white_between_teams_is_main_team() -> None:
+    assert _both_sides(white_feet=440) == Team.A
 
 
-def test_both_sides_not_separated_is_unknown() -> None:
-    assert _both_sides(white_feet=300, a_feet=300, b_feet=280) is None
+def test_both_sides_not_separated_is_main_team() -> None:
+    assert _both_sides(white_feet=300, a_feet=300, b_feet=280) == Team.A
 
 
-def test_owner_only_white_at_edge_of_band_is_unknown() -> None:
-    """Solo evidencia de B: un blanco en el borde de la franja (no en el centro) no se decide."""
+def test_owner_only_white_at_edge_of_band_is_main_team() -> None:
+    """Solo evidencia de B: un blanco en el borde de la franja (no en el centro) no alcanza para líbero."""
     players = [(DARK, 200 + 150 * i, 300 + 4 * i) for i in range(6)]
     players += [(WHITE, 1150, 300 + 4 * 2.5 + 0.035 * 720)]  # dentro de la franja, lejos del centro
     frame, boxes = draw(players)
-    assert TeamClassifier(TEAMS).classify(frame, boxes)[-1] is None
+    assert TeamClassifier(TEAMS).classify(frame, boxes)[-1] == Team.A
 
 
 def test_unambiguous_red_libero_still_classified() -> None:

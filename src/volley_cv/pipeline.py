@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-from volley_cv.court import CourtMask
+from volley_cv.court import CourtMask, feet_in
 from volley_cv.identity import IdentityManager, Observation
 from volley_cv.models import Embedder, PlayerDetector, Tracker
 from volley_cv.team import TeamClassifier
@@ -43,7 +43,9 @@ class Pipeline:
         manager: IdentityManager | None = None,
         shots: ShotDetector | None = None,
         renderer: DebugRenderer | None = None,
+        play_margin: float = 0.12,
     ) -> None:
+        self.play_margin = play_margin
         self.detector, self.tracker, self.embedder = detector, tracker, embedder
         self.court, self.teams = court, teams
         self.manager = manager or IdentityManager()
@@ -93,16 +95,22 @@ class Pipeline:
         return summary
 
     def _observations(self, frame: NDArray[np.uint8]) -> list[Observation]:
+        court_mask, play_mask = self.court.masks(frame, self.play_margin)
         dets = self.detector.detect(frame)
         if len(dets):
-            keep = self.court.in_court(
-                frame, [(float(d[0]), float(d[1]), float(d[2]), float(d[3])) for d in dets]
-            )
-            dets = dets[np.array(keep, dtype=bool)]
+            det_boxes = [(float(d[0]), float(d[1]), float(d[2]), float(d[3])) for d in dets]
+            # RF-2b: al tracker pasa toda la zona de juego (incluye la zona libre: saque, defensa)
+            keep = np.array(feet_in(play_mask, det_boxes), dtype=bool)
+            # RF-3b: los oficiales se descartan antes de que puedan ocupar un track
+            officials = self.teams.is_official(frame, [b for b, k in zip(det_boxes, keep, strict=True) if k])
+            idx = np.flatnonzero(keep)
+            keep[idx[np.array(officials, dtype=bool)]] = False
+            dets = dets[keep]
         tracks = self.tracker.update(dets.reshape(-1, 5), frame)
         if not len(tracks):
             return []
         boxes = [(float(t[0]), float(t[1]), float(t[2]), float(t[3])) for t in tracks]
+        in_court = feet_in(court_mask, boxes)
         teams = self.teams.classify(frame, boxes)
         embs = self.embedder.embed(frame, boxes)
         return [
@@ -112,6 +120,7 @@ class Pipeline:
                 confidence=float(min(max(t[5], 0.0), 1.0)),
                 team=team,
                 embedding=emb,
+                in_court=inside,
             )
-            for t, box, team, emb in zip(tracks, boxes, teams, embs, strict=True)
+            for t, box, team, emb, inside in zip(tracks, boxes, teams, embs, in_court, strict=True)
         ]

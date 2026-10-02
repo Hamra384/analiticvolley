@@ -44,9 +44,10 @@ def test_ac3_main_colors_and_unambiguous_libero() -> None:
     assert teams[0] == Team.A
 
 
-def test_ac3_single_rival_player_is_not_enough_side_evidence() -> None:
+def test_ac3_single_rival_player_is_not_enough_to_call_libero() -> None:
+    # RF-3d: sin evidencia suficiente de lado, el blanco va al equipo de color principal (A), nunca al líbero
     frame, boxes = draw([(WHITE, 100, 600), (DARK, 300, 250)])
-    assert TeamClassifier(TEAMS).classify(frame, boxes)[0] is None
+    assert TeamClassifier(TEAMS).classify(frame, boxes)[0] == Team.A
 
 
 def test_ac4_ambiguous_white_resolved_by_side_of_dark_team() -> None:
@@ -72,9 +73,10 @@ def test_ac4_uses_side_of_libero_owner_even_if_other_team_has_evidence() -> None
     assert teams[6:] == [Team.A, Team.A]
 
 
-def test_ac4_ambiguous_without_side_evidence_is_unknown() -> None:
+def test_ac4_ambiguous_without_side_evidence_goes_to_main_color_team() -> None:
+    # RF-3d: prior por cantidad (6 jugadores de color principal vs. 1 líbero)
     frame, boxes = draw([(WHITE, 200, 600), (WHITE, 500, 300)])
-    assert TeamClassifier(TEAMS).classify(frame, boxes) == [None, None]
+    assert TeamClassifier(TEAMS).classify(frame, boxes) == [Team.A, Team.A]
 
 
 def test_side_evidence_is_discarded_on_reset() -> None:
@@ -83,7 +85,8 @@ def test_side_evidence_is_discarded_on_reset() -> None:
     clf.classify(frame, boxes)
     clf.reset()
     frame, boxes = draw([(WHITE, 640, 250)])
-    assert clf.classify(frame, boxes) == [None]
+    # sin la evidencia del tramo anterior ya no puede ser el líbero de B: vuelve al equipo de color principal
+    assert clf.classify(frame, boxes) == [Team.A]
 
 
 def test_side_evidence_accumulates_across_frames_within_shot() -> None:

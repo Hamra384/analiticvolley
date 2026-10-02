@@ -27,11 +27,28 @@ errores de identidad.
   (equipo A, equipo B, líbero A, líbero B). Si la distancia supera `max_dist` → equipo desconocido. Si un color es
   ambiguo entre el principal de un equipo y el líbero del otro (diferencia de distancias < `ambiguity_margin`),
   se resuelve por el lado de la red: dentro del tramo, el lado de cada equipo se estima con la mediana del punto de
-  apoyo de sus jugadores no ambiguos. Sin esa evidencia → desconocido (nunca se asume lado = equipo sin datos).
+  apoyo de sus jugadores no ambiguos. *(Reemplazado en S4.1 por RF-3d: sin esa evidencia, el color ambiguo va
+  al equipo de color principal; nunca se asume lado = equipo sin datos.)*
+- RF-2b (S4.1, #11): **zona de juego con histéresis.** El tracker recibe todas las personas en la *zona de juego*
+  (máscara de cancha dilatada `play_margin` = 12 % del alto: incluye la zona libre donde se saca y se defiende).
+  Cada observación lleva `in_court` (apoyo sobre la cancha). Una identidad nueva solo se crea con evidencia
+  `in_court`; una identidad existente se sigue en toda la zona de juego (un jugador que sale a sacar no se pierde).
+- RF-3b (S4.1): **oficiales.** La config de cada video lista colores de oficiales (árbitros, jueces de línea). Si el
+  prototipo más cercano a un torso es de oficial, la persona se descarta antes del tracker. Medido en A2: el chaleco
+  gris de los jueces de línea (Lab ~122,126,126) quedaba a distancia 43 del líbero rojo de Japón (< 45) y se
+  convertía en jugador, ocupando un lugar del cupo.
+- RF-3d (S4.1, tras revisión visual): **prior por cantidad.** Un color ambiguo (principal de X = líbero de Y) se
+  asigna por defecto a X (hay ~6 jugadores con ese color y a lo sumo un líbero); solo con evidencia fuerte de lado
+  (dentro de la franja compacta de Y, separada de la de X, y más cerca de Y) se asigna a Y. Reemplaza la regla
+  "ante duda, desconocido" de la revisión S4: en A2 producía identidades de Argentina con japoneses blancos.
+- RF-3c (S4.1): **a lo sumo un líbero por equipo** en un frame: si varios jugadores ambiguos se resolverían como
+  líbero del mismo equipo, solo se conserva el más central en la franja de ese equipo; el resto queda desconocido.
 - RF-4: Embeddings de apariencia sobre el recorte de la caja; normalizados. **Decisión de implementación (S4):**
   ResNet18 ImageNet (torchvision, BSD) en lugar de OSNet x0.25, porque la API de Re-ID de boxmot 25 cambió y
   resolverla requiere un spike. Es reversible (interfaz `Embedder`); se compara contra OSNet en S6 con datos
-  anotados.
+  anotados. **Actualización S4.1 (SPIKE-003):** medido sobre A2/K2, el histograma de color HSV superó a ResNet18 y
+  a OSNet (AUC en compañeros de color parecido 0,965/0,929 vs 0,953/0,903 vs 0,921/0,873); el pipeline usa
+  `ColorHistEmbedder`.
 - RF-5: Salida JSONL: una línea `FrameOutput` por frame procesado, con el índice de frame absoluto del video.
 - RF-6: Video de debug: caja coloreada por equipo, etiqueta con `player_id` corto (p. ej. `A04`), dorsal si existe,
   estado y `track_id` (opcional), trayectoria de los últimos `trail` frames, línea de marcador del frame/estado
@@ -61,6 +78,10 @@ errores de identidad.
 - [ ] AC-5: dado un pipeline con detector/tracker/embedder falsos sobre frames sintéticos, cuando se corre, entonces escribe una línea JSONL por frame, cada una valida contra `FrameOutput`, y los `player_id` son estables.
 - [ ] AC-6: dado un corte de edición en la secuencia sintética, cuando corre el pipeline, entonces se llama `reset()` del `IdentityManager` en ese frame.
 - [ ] AC-7: dado un frame y su `FrameOutput`, cuando se dibuja el debug, entonces la imagen cambia en las cajas de los jugadores, el color depende del equipo y la etiqueta incluye el `player_id` corto; con todo desactivado, la imagen no cambia.
+- [ ] AC-9 (S4.1): dado un jugador identificado que camina fuera de la cancha (zona libre) y vuelve, cuando corre el pipeline, entonces no se pierde su seguimiento ni cambia su `player_id`; y una persona que nunca pisó la cancha no recibe identidad.
+- [ ] AC-10 (S4.1): dado una persona con el color de oficial configurado, cuando se clasifica, entonces se descarta (nunca llega al tracker ni a una identidad).
+- [ ] AC-11 (S4.1): dado varios blancos ambiguos en la franja del equipo cuyo líbero es blanco, cuando se clasifican, entonces a lo sumo uno es asignado a ese equipo.
+- [ ] AC-12 (S4.1): dado el debug de un clip real, cuando se cierra el sprint, entonces existe una hoja de revisión visual por identidad (`tools/review_sheet.py`) revisada y documentada en el informe.
 - [ ] AC-8: dado el clip A2 real (GPU, local), cuando se corre el CLI, entonces produce `frames.jsonl` válido con 600 líneas y `debug.mp4` reproducible (evidencia manual registrada en el informe; no corre en CI).
 
 ## Restricciones técnicas

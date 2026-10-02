@@ -177,7 +177,9 @@ def test_cli_end_to_end_with_fake_models(tmp_path: Path, monkeypatch: object) ->
     mp.setenv("VOLLEY_DATA_DIR", str(tmp_path))  # type: ignore[attr-defined]
     mp.setattr(adapters, "YoloPersonDetector", lambda weights, **kw: FakeDetector())  # type: ignore[attr-defined]
     mp.setattr(adapters, "ByteTrackTracker", lambda frame_rate=30: FakeTracker())  # type: ignore[attr-defined]
-    mp.setattr(adapters, "TorchvisionEmbedder", FakeEmbedder)  # type: ignore[attr-defined]
+    import volley_cv.appearance as appearance
+
+    mp.setattr(appearance, "ColorHistEmbedder", FakeEmbedder)  # type: ignore[attr-defined]
     out = tmp_path / "out"
     code = main(
         [

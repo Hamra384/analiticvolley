@@ -36,6 +36,17 @@ número de camiseta, y número como metadata.
 - RF-4c (revisión S3): si el equipo observado contradice al de la identidad del tracklet, esa caja no se emite ni
   actualiza la identidad en ese frame. Un `track_id` repetido en el mismo frame: se conserva la observación de
   mayor confianza.
+- RF-3b (S4.1, #11): una identidad nueva requiere que el tracklet tenga ≥ `confirm_frames` observaciones con
+  `in_court` y que ≥ `team_min_share` (80 %) de sus votos de equipo coincidan (en A2 una identidad nació como
+  Argentina con pocos votos erróneos y quedó así).
+- RF-4d (S4.1): tras un hueco largo (> `long_gap_frames`) o un corte, la Re-ID es solo por apariencia y exige
+  distancia de apariencia ≤ `appearance_only_max_dist` (0,08, más estricta que la que admite el costo normal):
+  en A2 un juez de línea "heredó" la identidad de un jugador perdido 146 frames.
+- RF-5b (S4.1): el contador de contradicciones de equipo de un tracklet ignora los frames con equipo desconocido
+  (antes se reiniciaba y los cambios intermitentes nunca partían el tracklet).
+- RF-8b (S4.1): cupo sin bloqueos. **Verificado con AC-21 que ya ocurre:** una identidad oculta pasa a `LOST` a
+  los `lost_after` frames y libera el lugar. El bloqueo observado en A2 lo causaba un oficial **visible todo el
+  clip** ocupando un lugar; se resuelve excluyendo oficiales (SPEC-002 RF-3b), no con una regla de reemplazo.
 - RF-5: Partición de tracklets: si la apariencia de un tracklet se aleja de su referencia por encima de
   `split_distance` durante `split_frames` frames consecutivos, o su equipo cambia de forma sostenida, el tracklet
   se parte y el fragmento nuevo pasa por RF-3/RF-4.
@@ -102,6 +113,11 @@ Las identidades `OCCLUDED`/`LOST` no aparecen en la salida del frame (no hay caj
 - [ ] AC-12: dado una única lectura "1" con confianza 0,6, cuando se procesa, entonces el dorsal sigue en `null`.
 - [ ] AC-13: dado dos identidades del mismo equipo con lecturas "5", cuando se procesan, entonces solo la de mayor evidencia tiene `jersey_number = 5`; y dado el mismo número en equipos distintos, entonces ambos lo conservan.
 - [ ] AC-14: dado el equipo A con 6 identidades vigentes, cuando aparece un séptimo tracklet incompatible del equipo A, entonces no se crea una séptima identidad vigente.
+- [ ] AC-18 (S4.1): dado un tracklet que nunca pisó la cancha (`in_court` falso), cuando se confirma, entonces no crea identidad; y una identidad existente sí se sigue fuera de la cancha.
+- [ ] AC-19 (S4.1): dado un tracklet con votos de equipo mixtos (< 80 % del mismo equipo), cuando se confirma, entonces no crea identidad hasta que la proporción alcance el umbral.
+- [ ] AC-20 (S4.1): dado una identidad cuyo tracklet alterna frames con el equipo contrario y frames desconocidos, cuando acumula `team_split_frames` contradicciones, entonces el tracklet se parte.
+- [ ] AC-21 (S4.1): dado el cupo lleno con una identidad OCCLUDED y un jugador nuevo confirmado en cancha que espera `max_wait_frames`, cuando se procesa, entonces la OCCLUDED pasa a LOST y el nuevo recibe identidad.
+- [ ] AC-22 (S4.1): dado una identidad perdida > `long_gap_frames` y un tracklet nuevo con apariencia solo parecida (distancia de apariencia > `appearance_only_max_dist` aunque el costo total sea < `accept_cost`), cuando se procesa, entonces no se re-identifica; con apariencia idéntica, sí.
 - [ ] AC-15: dado cualquier frame procesado, cuando se serializa, entonces la salida valida contra el esquema `FrameOutput` (campos del punto 13 del MVP: `frame`, `players[]` con `player_id`, `track_id`, `team_id`, `jersey_number`, `jersey_confidence`, `bbox`, `confidence`, `state`).
 - [ ] AC-16: dado la misma secuencia de entrada dos veces, cuando se procesa, entonces las salidas son idénticas.
 - [ ] AC-17: dado un cruce entre jugadores de equipos distintos con intercambio de tracks del tracker, cuando se separan, entonces ningún `player_id` cambia de equipo.
