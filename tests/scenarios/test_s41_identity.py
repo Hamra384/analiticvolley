@@ -83,8 +83,8 @@ def test_ac22_long_gap_requires_strict_appearance_match() -> None:
     gap_end = 20 + cfg.long_gap_frames + 10
     for f in range(20, gap_end):
         mgr.update(f, [])
-    # coseno 0,9 con el jugador: costo 0,6*0,1 + 0,4*0,5 = 0,26: pasaría el umbral normal (0,30) pero no el
-    # estricto para huecos largos (0,15)
+    # coseno 0,9 con el jugador: costo 0,6*0,1 + 0,4*0,5 = 0,26 pasaría el umbral normal (0,30), pero la
+    # distancia de apariencia (0,1) supera la estricta para huecos largos (appearance_only_max_dist = 0,08)
     k = float(np.sqrt(1 / 0.9**2 - 1))
     similar = (E[0] + k * E[5]) / np.linalg.norm(E[0] + k * E[5])
     outs = [
@@ -94,6 +94,32 @@ def test_ac22_long_gap_requires_strict_appearance_match() -> None:
         for f in range(gap_end, gap_end + 10)
     ]
     assert all(p.player_id != "TEAM_A_PLAYER_01" for o in outs for p in o.players)
+
+
+def test_h2_split_fragment_does_not_inherit_in_court_evidence() -> None:
+    """Revisión S4.1 H2: el tracker salta (mismo id) de un jugador en cancha a un juez siempre afuera."""
+    mgr = IdentityManager()
+    for f in range(20):
+        mgr.update(f, [obs(1, 800, 0)])
+    outs = [mgr.update(f, [obs(1, 1700, 7, in_court=False)]) for f in range(20, 80)]
+    assert all(p.player_id == "TEAM_A_PLAYER_01" or False for o in outs[:5] for p in o.players)
+    assert "TEAM_A_PLAYER_02" not in {p.player_id for o in outs for p in o.players}
+
+
+def test_m1_off_court_lookalike_cannot_take_recently_lost_identity_by_motion() -> None:
+    """Revisión S4.1 M1: alguien en la zona libre, cerca y parecido, no hereda una identidad recién perdida"""
+    mgr = IdentityManager()
+    for f in range(20):
+        mgr.update(f, [obs(1, 800, 0)])
+    for f in range(20, 40):
+        mgr.update(f, [])
+    k = float(np.sqrt(1 / 0.85**2 - 1))  # distancia de apariencia 0,15 (parecido realista según SPIKE-003)
+    look = ((E[0] + k * E[6]) / np.linalg.norm(E[0] + k * E[6])).astype(np.float32)
+    outs = [
+        mgr.update(f, [Observation(5, (1000.0, 500.0, 1060.0, 650.0), 0.9, Team.A, look, in_court=False)])
+        for f in range(40, 50)
+    ]
+    assert "TEAM_A_PLAYER_01" not in {p.player_id for o in outs for p in o.players}
 
 
 def test_ac22_long_gap_off_court_person_cannot_inherit_identity() -> None:

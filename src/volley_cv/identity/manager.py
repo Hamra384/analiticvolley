@@ -63,6 +63,7 @@ class _Tracklet:
     far_count: int = 0
     team_mismatch: int = 0
     recent: list[Vec] = field(default_factory=list)
+    recent_in_court: list[bool] = field(default_factory=list)  # in_court de cada observación de `recent`
     # cada lectura recuerda a qué identidad se le sumó (None = a ninguna), para no contarla dos veces
     reads: list[tuple[JerseyRead, str | None, int]] = field(
         default_factory=list
@@ -235,9 +236,11 @@ class IdentityManager:
             if emb is not None and t.ref is not None and _cos_dist(emb, t.ref) > cfg.split_distance:
                 t.far_count += 1
                 t.recent.append(emb)
+                t.recent_in_court.append(o.in_court)
             else:
                 t.far_count = 0
                 t.recent.clear()
+                t.recent_in_court.clear()
             team = t.team
             # RF-5b: los frames sin equipo no reinician el contador de contradicciones
             if o.team is not None and team is not None:
@@ -284,7 +287,8 @@ class IdentityManager:
         new = self._new_tracklet(old.raw)
         new.ref = _unit(np.mean(np.stack(recent), axis=0)) if recent else None
         new.obs_count = len(recent)
-        new.in_court_count = min(len(recent), old.in_court_count)
+        # H2 (revisión S4.1): el fragmento cuenta solo su propia evidencia de cancha, no la de otra persona
+        new.in_court_count = sum(old.recent_in_court)
         if old.last_team is not None:
             new.team_votes[old.last_team] += max(len(recent), old.team_mismatch)
         return new
@@ -396,7 +400,7 @@ class IdentityManager:
             self._identities[pid].tracklet = t.key
             self._move_reads(t, pid, since=episode_start)
             if t.last_emb is not None and any(t is free[p][0] for p in fixed):
-                t.ref, t.far_count, t.recent = t.last_emb, 0, []
+                t.ref, t.far_count, t.recent, t.recent_in_court = t.last_emb, 0, [], []
 
     # ── identidades ──────────────────────────────────────────────────────────────
     def _update_identity(
@@ -437,13 +441,16 @@ class IdentityManager:
         read = t.confident_read(cfg.jersey_min_conf)
         if read is not None and idn.jersey is not None:
             jersey = -cfg.jersey_bonus if read == idn.jersey[0] else cfg.jersey_penalty
+        never_on_court = t.in_court_count == 0
         if t.ref is None or g is None:
-            if appearance_only:
-                return INF  # sin movimiento ni apariencia no hay evidencia para re-identificar
+            if appearance_only or never_on_court:
+                return INF  # sin apariencia no hay evidencia suficiente para re-identificar a cualquiera
             return 2 * cfg.w_motion * d_mot + jersey  # sin apariencia: más exigente
         d_app = min(_cos_dist(t.ref, x) for x in idn.gallery) if idn.gallery else _cos_dist(t.ref, g)
-        if appearance_only and d_app > cfg.appearance_only_max_dist:
-            return INF  # RF-4d: tras un hueco largo solo una apariencia casi idéntica re-identifica
+        if (appearance_only or never_on_court) and d_app > cfg.appearance_only_max_dist:
+            # RF-4d y M1 (revisión S4.1): tras un hueco largo, o para quien nunca pisó la cancha, solo una
+            # apariencia casi idéntica re-identifica
+            return INF
         return cfg.w_appearance * d_app + cfg.w_motion * d_mot + jersey
 
     def _associate(

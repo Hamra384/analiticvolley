@@ -27,7 +27,8 @@ errores de identidad.
   (equipo A, equipo B, líbero A, líbero B). Si la distancia supera `max_dist` → equipo desconocido. Si un color es
   ambiguo entre el principal de un equipo y el líbero del otro (diferencia de distancias < `ambiguity_margin`),
   se resuelve por el lado de la red: dentro del tramo, el lado de cada equipo se estima con la mediana del punto de
-  apoyo de sus jugadores no ambiguos. Sin esa evidencia → desconocido (nunca se asume lado = equipo sin datos).
+  apoyo de sus jugadores no ambiguos. *(Reemplazado en S4.1 por RF-3d: sin esa evidencia, el color ambiguo va
+  al equipo de color principal; nunca se asume lado = equipo sin datos.)*
 - RF-2b (S4.1, #11): **zona de juego con histéresis.** El tracker recibe todas las personas en la *zona de juego*
   (máscara de cancha dilatada `play_margin` = 12 % del alto: incluye la zona libre donde se saca y se defiende).
   Cada observación lleva `in_court` (apoyo sobre la cancha). Una identidad nueva solo se crea con evidencia

@@ -37,6 +37,13 @@ licencia no comercial (MSMT17). ResNet18 era el peor de los tres.
 Umbrales recalibrados con estas distribuciones: `split_distance` 0,35 → **0,20** (mismo jugador p90 = 0,14 <
 0,20 < compañeros distintos mediana 0,25–0,37); `appearance_only_max_dist` = 0,08 (< p10 de difíciles, 0,095–0,12).
 
+## Costo asumido del umbral estricto (revisión S4.1, M2)
+`appearance_only_max_dist = 0,08` queda **por debajo** del p90 del mismo jugador incluso en el caso fácil (0,14
+a 10 frames): rechaza > 10 % de re-identificaciones correctas allí y probablemente la mayoría tras un corte o un
+hueco largo. En la práctica, **la Re-ID solo por apariencia queda casi desactivada**: se prefiere una identidad
+nueva (fragmentación, visible en K2: 11 + 9 identidades) antes que heredar la de otra persona (los errores que vio
+el usuario). La señal que debe reemplazarla es el número de camiseta (S5a). Medir el costo real requiere S6.
+
 ## Limitaciones (honestas)
 - Los positivos están a 10 frames (misma pose y luz): favorece al color. Para re-identificar tras huecos largos o
   cortes de cámara la ventaja puede achicarse. Revalidar en S6 con ground truth.
