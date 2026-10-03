@@ -35,7 +35,7 @@ def training_windows(
     window_s: float = 2.0,
     every_s: float = 20.0,
 ) -> list[tuple[str, float, float]]:
-    """(video, inicio, fin): ventanas de `window_s` cada `every_s`, lejos (`margin_s`) de los clips de evaluación."""
+    """(video, inicio, fin): ventanas de `window_s` cada `every_s`, a `margin_s` o más de los clips de eval."""
     out = []
     for video, dur in sorted(durations.items()):
         banned = [(c.start_s - margin_s, c.end_s + margin_s) for c in catalog.clips if c.video == video]
