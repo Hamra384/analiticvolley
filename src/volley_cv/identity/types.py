@@ -45,6 +45,7 @@ class Observation:
     embedding: NDArray[np.float32] | None = field(default=None)
     jersey: JerseyRead | None = None
     in_court: bool = True  # apoyo sobre la cancha (fuera = zona libre de la zona de juego); RF-3b
+    libero: bool = False  # el torso es del prototipo de líbero del equipo (SPEC-004 RF-1)
 
     @property
     def center(self) -> tuple[float, float]:

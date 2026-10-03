@@ -137,7 +137,7 @@ class Pipeline:
         boxes = [(float(t[0]), float(t[1]), float(t[2]), float(t[3])) for t in tracks]
         in_court = feet_in(court_mask, boxes)
         reads = self._read_numbers(frame, tracks, boxes)
-        teams = self.teams.classify(frame, boxes, numbers=self._team_numbers(tracks, boxes, reads))
+        roles = self.teams.classify_roles(frame, boxes, numbers=self._team_numbers(tracks, boxes, reads))
         embs = self.embedder.embed(frame, boxes)
         return [
             Observation(
@@ -148,9 +148,10 @@ class Pipeline:
                 embedding=emb,
                 jersey=read,
                 in_court=inside,
+                libero=libero,
             )
-            for t, box, team, emb, read, inside in zip(
-                tracks, boxes, teams, embs, reads, in_court, strict=True
+            for t, box, (team, libero), emb, read, inside in zip(
+                tracks, boxes, roles, embs, reads, in_court, strict=True
             )
         ]
 

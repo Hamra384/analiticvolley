@@ -80,9 +80,20 @@ class TeamClassifier:
         numbers: Sequence[int | None] | None = None,
     ) -> list[Team | None]:
         """Equipo por caja. `numbers` (opcional): número leído por caja, para el líbero (SPEC-003 RF-6)."""
+        return [team for team, _ in self.classify_roles(frame, boxes, numbers)]
+
+    def classify_roles(
+        self,
+        frame: NDArray[np.uint8],
+        boxes: Sequence[Box],
+        numbers: Sequence[int | None] | None = None,
+    ) -> list[tuple[Team | None, bool]]:
+        """(equipo, es_líbero) por caja (SPEC-004 RF-1): líbero = color de líbero inequívoco, o color ambiguo
+        resuelto como líbero por lado o por número."""
         self._frame += 1
         h = frame.shape[0]
         result: list[Team | None] = [None] * len(boxes)
+        libero_color = [False] * len(boxes)
         ambiguous: list[tuple[int, set[tuple[Team, bool]]]] = []
         dist_of: dict[int, dict[tuple[Team, bool], float]] = {}
         for k, box in enumerate(boxes):
@@ -97,6 +108,7 @@ class TeamClassifier:
             if len({t for t, _ in close}) == 1:
                 team = next(iter(close))[0]
                 result[k] = team
+                libero_color[k] = min(dists)[2]  # el prototipo más cercano del equipo
                 self._side[team].append((self._frame, box[3]))
             else:
                 ambiguous.append((k, close))
@@ -151,7 +163,9 @@ class TeamClassifier:
                     and not self._on_rival_side(boxes[k][3], owner, h, rival_meds[k])
                 ):
                     result[k] = owner
-        return result
+        for k, (owner, _) in pairs.items():
+            libero_color[k] = result[k] == owner
+        return [(team, lib and team is not None) for team, lib in zip(result, libero_color, strict=True)]
 
     def _band(self, team: Team, h: float) -> tuple[float, float, float] | None:
         """(mediana, límite inferior, límite superior) robustos del apoyo de `team` en el tramo, o None si la

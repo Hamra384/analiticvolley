@@ -60,7 +60,8 @@ def test_ac20_intermittent_contradictions_with_unknown_frames_split_tracklet() -
 
 
 def test_ac21_full_roster_with_occluded_identity_admits_real_player() -> None:
-    cfg = IdentityConfig(max_wait_frames=10)
+    # semántica sin plantel cerrado; con SPEC-004 (default) el nuevo toma por descarte la identidad libre
+    cfg = IdentityConfig(max_wait_frames=10, closed_roster=False)
     mgr = IdentityManager(cfg)
     for f in range(20):
         mgr.update(f, [obs(i, 100 + 250 * i, i) for i in range(6)])

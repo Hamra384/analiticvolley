@@ -12,6 +12,9 @@ class IdentityConfig:
     lost_after: int = 15  # frames sin observación: OCCLUDED -> LOST
     roster_size: int = 6  # identidades vigentes máximas por equipo (RF-8)
     max_wait_frames: int = 30  # tracklet ambiguo: frames de espera antes de decidir
+    # SPEC-004: plantel cerrado (IDs 01-06 de campo + 07 líbero; Re-ID por descarte con cupo lleno)
+    closed_roster: bool = True
+    field_slots: int = 6
     team_min_share: float = 0.8  # proporción mínima de votos del mismo equipo para crear identidad (RF-3b)
 
     # asociación (RF-4); distancias de apariencia = coseno (0..2), movimiento en alturas de jugador
