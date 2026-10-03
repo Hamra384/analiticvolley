@@ -39,6 +39,15 @@ Antes de incorporar una fuente nueva se agrega una fila con fuente, licencia, us
 Nota: el proyecto ya es AGPL-compatible por depender de Ultralytics; el repo es público. Si en algún momento se
 quisiera uso comercial, hay que revisar Ultralytics/boxmot (licencia comercial) y no usar pesos MSMT17.
 
+## Datos y modelos derivados (S5b)
+
+| Artefacto | Ubicación (directorio de datos) | Origen | En el repo |
+|---|---|---|---|
+| `datasets/ball_v1` (1738 frames con pseudo-etiqueta de pelota) | fuera del repo | frames de `jpn_arg_2026` y `jpn_kor_2026` a más de 60 s de cualquier clip de evaluación; etiquetas automáticas de YOLOv8m COCO + BallTracker (`tools/ball_dataset.py`) | **no** (derechos de terceros) |
+| `models/ball_v1.pt` (YOLOv8s, 1 clase, detector de pelota por defecto) | fuera del repo | fine-tuning de YOLOv8s COCO (AGPL-3.0, Ultralytics) sobre `ball_v1` (`tools/train_ball.py`, 36 épocas) | **no** (deriva de las transmisiones) |
+
+Para reproducir: `uv run --extra ml python -m tools.ball_dataset` y luego `python -m tools.train_ball --batch 2`.
+
 ## Anotaciones
 
 Ground truth de los 10 clips de `configs/eval/clips.yaml`: se pre-anotan automáticamente y el usuario las corrige

@@ -199,6 +199,7 @@ def test_cli_end_to_end_with_fake_models(tmp_path: Path, monkeypatch: object) ->
             "0:01",
             "--out",
             str(out),
+            "--ball-coco",
         ]
     )
     assert code == 0

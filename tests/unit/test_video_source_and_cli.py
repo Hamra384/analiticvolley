@@ -88,3 +88,12 @@ def test_cli_ball_weights_must_be_relative(
     monkeypatch.setenv("VOLLEY_DATA_DIR", str(tmp_path))
     assert main(["run", "--clip", "A2", "--ball-weights", "../ball.pt"]) == 2
     assert "--ball-weights" in capsys.readouterr().err
+
+
+def test_cli_default_ball_weights_must_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # SPEC-005: el detector propio es el default; si faltan sus pesos no se cae a COCO en silencio
+    monkeypatch.setenv("VOLLEY_DATA_DIR", str(tmp_path))
+    assert main(["run", "--clip", "A2"]) == 2
+    assert "models/ball_v1.pt" in capsys.readouterr().err

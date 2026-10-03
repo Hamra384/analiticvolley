@@ -45,6 +45,9 @@ necesaria, y aun con un buen detector va a haber frames sin detección (pelota t
   evaluación): el detector propio reemplaza al COCO si su P1 (cobertura del track) mediana es ≥ 0,6 **y** mayor que
   la del COCO, con P4 (precisión visual, 12 recortes al azar por clip en al menos 4 clips) ≥ 0,8. Si no, se queda el
   COCO y se documenta.
+- RF-8b (decisión del usuario, 2026-10-03): el detector propio quedó en P1 mediana 0,56 (< 0,6) pero supera al COCO
+  en los 10 clips (COCO 0,35), con P4 ≈ 0,96 y el doble de velocidad. Se adopta como **excepción documentada** a
+  RF-8; la evaluación real (recall contra anotación humana) queda para S6.
 
 ## Requerimientos no funcionales
 - RNF-1: el tracker es determinista y corre en CPU en < 1 ms por frame.

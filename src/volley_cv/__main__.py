@@ -26,7 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--no-jersey", action="store_true", help="no leer números de camiseta (SPEC-003)")
     run.add_argument(
         "--ball-weights",
-        help="pesos propios de pelota (1 clase), relativos al dir. de datos; default: COCO clase 32",
+        default="models/ball_v1.pt",
+        help="pesos de pelota (1 clase), relativos al directorio de datos (SPEC-005: detector propio)",
+    )
+    run.add_argument(
+        "--ball-coco", action="store_true", help="pelota con YOLO COCO (clase 32) en vez del propio"
     )
     run.add_argument("--no-ball", action="store_true", help="no trackear la pelota (SPEC-005)")
     run.add_argument("--weights", default="yolov8m.pt", help="pesos YOLO relativos al directorio de datos")
@@ -51,12 +55,6 @@ def _run(args: argparse.Namespace) -> int:
 
     data = load_settings().data_dir
     _check_relative(args.weights, "--weights")
-    if args.ball_weights:
-        _check_relative(args.ball_weights, "--ball-weights")
-        if not (data / args.ball_weights).is_file():
-            raise ConfigError(
-                f"no existen los pesos de pelota: {args.ball_weights}"
-            )  # SPEC-005: sin caer a COCO
     if args.video:
         _check_relative(args.video, "--video")
     if args.clip:
@@ -74,16 +72,20 @@ def _run(args: argparse.Namespace) -> int:
         if end <= start:
             raise ConfigError(f"el inicio ({args.start}) debe ser anterior al fin ({args.end})")
         name = f"{Path(args.video).stem}_{int(start)}_{int(end)}"
+    if not args.no_ball and not args.ball_coco:
+        _check_relative(args.ball_weights, "--ball-weights")
+        if not (data / args.ball_weights).is_file():  # SPEC-005: sin caer a COCO en silencio
+            raise ConfigError(f"no existen los pesos de pelota: {args.ball_weights}")
     vcfg = load_video_config(video_id)
     info = probe(path)
     out_dir = Path(args.out) if args.out else data / "outputs" / name
     people = YoloPersonDetector(data / args.weights)
     if args.no_ball:
         ball = None
-    elif args.ball_weights:
-        ball = YoloBallDetector(data / args.ball_weights)
-    else:
+    elif args.ball_coco:
         ball = YoloBallDetector.from_person_detector(people)  # misma pasada de YOLO (SPEC-005 RF-1)
+    else:
+        ball = YoloBallDetector(data / args.ball_weights)
     pipe = Pipeline(
         detector=people,
         tracker=ByteTrackTracker(frame_rate=round(info.fps)),
