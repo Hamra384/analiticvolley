@@ -22,6 +22,10 @@ necesaria, y aun con un buen detector va a haber frames sin detección (pelota t
 - RF-2: `BallTracker` con filtro de Kalman de aceleración constante en píxeles. Por frame elige a lo sumo un
   candidato: el más cercano a la predicción dentro de un radio que crece con los frames sin detección; sin track,
   el de mayor confianza ≥ `start_conf`.
+- RF-2b (agregado al medir: en A2, 203 de 378 frames "con pelota" eran una pelota de repuesto en la mano de un
+  alcanzapelotas): una detección que permanece quieta (radio ≈ 0,6 diámetros) durante `static_frames` (1,5 s) es
+  un señuelo y se ignora mientras siga quieta. Costo: la pelota en la mano del sacador antes del saque puede salir
+  `LOST`.
 - RF-3: estados por frame:
   - `DETECTED`: primera detección de un track nuevo.
   - `TRACKED`: detección asociada al track existente.
@@ -62,6 +66,7 @@ necesaria, y aun con un buen detector va a haber frames sin detección (pelota t
 - [ ] AC-4: dado un frame sin detección, cuando se procesa, entonces el estado nunca es `DETECTED` ni `TRACKED`.
 - [ ] AC-5: dado un falso positivo lejano mientras hay track, cuando se procesa, entonces no se asocia (se elige el candidato compatible o se predice).
 - [ ] AC-6: dado un corte de escena, cuando se reinicia, entonces el estado es `LOST` hasta la próxima detección, que es `DETECTED`.
+- [ ] AC-10: dado un señuelo quieto detectado siempre y la pelota del juego en vuelo, cuando se procesa, entonces el track nunca queda en el señuelo; un señuelo solo termina en `LOST`; una pelota lenta pero en movimiento no es señuelo.
 - [ ] AC-7: dado el pipeline con un detector de pelota falso, cuando corre, entonces cada frame del JSONL tiene `ball` con estado válido y el video de debug se escribe.
 - [ ] AC-8: dado los segmentos de entrenamiento, cuando se generan, entonces ningún frame cae a menos de 60 s de un clip de evaluación (test del generador con el catálogo real).
 - [ ] AC-9: dado el detector entrenado, cuando se mide con las métricas de SPIKE-002 en los 10 clips, entonces se aplica RF-8 y la decisión queda documentada en el informe (evidencia manual de P4).
@@ -80,7 +85,7 @@ Los frames de entrenamiento y los pesos derivados quedan fuera del repo público
 ## Estrategia de testing
 | AC | Test |
 |---|---|
-| AC-1…AC-6 | unit del tracker con trayectorias sintéticas (`tests/unit/test_ball_tracker.py`) |
+| AC-1…AC-6, AC-10 | unit del tracker con trayectorias sintéticas (`tests/unit/test_ball_tracker.py`) |
 | AC-7 | integración del pipeline con detector falso (`tests/integration/test_ball_pipeline.py`) |
 | AC-8 | unit del generador de segmentos (`tests/unit/test_ball_segments.py`) |
 | AC-9 | medición proxy + revisión visual manual |

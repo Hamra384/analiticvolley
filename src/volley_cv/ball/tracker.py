@@ -35,6 +35,11 @@ class BallTrackerConfig:
     meas_std: float = 2.0  # ruido de medición (px)
     accel_std: float = 0.5  # ruido de proceso en la aceleración (px/frame²)
     conf_decay: float = 0.8  # factor de confianza por frame predicho
+    # RF-2b: una detección que no se mueve durante `static_frames` es un señuelo (pelota de repuesto
+    # en la mano de un alcanzapelotas, pelota en el piso): se ignora mientras siga quieta
+    static_frames: int = 45  # 1,5 s a 30 FPS
+    static_radius_px: float = 6.0
+    static_forget: int = 15  # frames sin verla para olvidar el señuelo
 
 
 @dataclass(frozen=True)
@@ -55,19 +60,22 @@ class BallTracker:
         self._hits = 0
         self._conf = 0.0
         self._lost = False  # el track actual pasó por LOST (la próxima detección compatible es REACQUIRED)
+        self._frame = 0
+        self._spots: list[list[float]] = []  # [x, y, frames quieta, último frame visto] (RF-2b)
         # ruido de proceso: un salto de aceleración afecta posición (½), velocidad (1) y aceleración (1)
         self._q = np.diag([0.25, 0.25, 1.0, 1.0, 1.0, 1.0]) * self.config.accel_std**2
         self._r = np.eye(2) * self.config.meas_std**2
 
     def reset(self) -> None:
         """Corte de escena (RF-5): se descarta el track."""
+        self._spots.clear()
         self._x = None
         self._missed = self._hits = 0
         self._lost = False
 
     def update(self, candidates: NDArray[np.float32]) -> BallState:
         cfg = self.config
-        cands = np.asarray(candidates, dtype=np.float64).reshape(-1, 5)
+        cands = self._drop_decoys(np.asarray(candidates, dtype=np.float64).reshape(-1, 5))
         if self._x is None:
             return self._start(cands)
         self._predict()
@@ -105,6 +113,25 @@ class BallTracker:
         return BallState(self._id, None, 0.0, "LOST")
 
     # ── internos ──────────────────────────────────────────────────────────────────
+    def _drop_decoys(self, cands: NDArray[np.float64]) -> NDArray[np.float64]:
+        """RF-2b: actualiza los lugares donde hay una detección quieta y descarta las que ya son señuelos."""
+        cfg = self.config
+        self._frame += 1
+        keep = []
+        for c in cands:
+            r = max(cfg.static_radius_px, 0.6 * float(c[2]))  # tolera el temblor de una pelota en la mano
+            spot = next((s for s in self._spots if np.hypot(c[0] - s[0], c[1] - s[1]) <= r), None)
+            if spot is None:
+                spot = [float(c[0]), float(c[1]), 0.0, float(self._frame)]
+                self._spots.append(spot)
+            if spot[3] >= self._frame - 1:
+                spot[2] += 1  # vista de nuevo en el mismo lugar
+                spot[0], spot[1] = 0.8 * spot[0] + 0.2 * float(c[0]), 0.8 * spot[1] + 0.2 * float(c[1])
+            spot[3] = float(self._frame)
+            keep.append(spot[2] < cfg.static_frames)
+        self._spots = [s for s in self._spots if s[3] >= self._frame - cfg.static_forget]
+        return cands[np.array(keep, dtype=bool)] if len(cands) else cands
+
     @property
     def _id(self) -> str:
         return f"ball_{max(self._n_tracks, 1)}"

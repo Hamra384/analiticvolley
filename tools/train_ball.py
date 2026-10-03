@@ -38,7 +38,7 @@ def main(argv: list[str]) -> int:
         exist_ok=True,
         workers=2,
         seed=0,
-        deterministic=True,
+        deterministic=False,  # con True, torch 2.5 + CUDA falla en torch.unique (overflow)
         # la pelota es chica y borrosa: sin recortes agresivos; blur/HSV moderados
         mosaic=0.5,
         scale=0.3,

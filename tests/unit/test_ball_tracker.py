@@ -102,3 +102,31 @@ def test_track_id_changes_after_a_cut() -> None:
     tr.reset()
     b = tr.update(det(500.0, 400.0)).track_id
     assert a != b
+
+
+def test_rf2b_static_decoy_does_not_capture_the_track() -> None:
+    # A2 real: un alcanzapelotas sostiene una pelota de repuesto quieta fuera de la cancha (siempre visible)
+    tr = BallTracker()
+    decoy = np.array([[100.0, 100.0, D, D, 0.9]], dtype=np.float32)
+    for _ in range(CFG.static_frames + 5):
+        tr.update(decoy)
+    outs = []
+    for f in range(40):  # la pelota del juego aparece en vuelo (detectada 2 de cada 3 frames)
+        live = det(*parabola(f), conf=0.5) if f % 3 else np.zeros((0, 5), dtype=np.float32)
+        outs.append(tr.update(np.vstack([decoy, live])))
+    for o in outs[5:]:
+        assert o.position is not None
+        assert np.hypot(o.position[0] - 100.0, o.position[1] - 100.0) > 3 * D  # nunca en el señuelo
+
+
+def test_rf2b_decoy_alone_is_eventually_not_reported() -> None:
+    tr = BallTracker()
+    decoy = np.array([[100.0, 100.0, D, D, 0.9]], dtype=np.float32)
+    outs = [tr.update(decoy) for _ in range(CFG.static_frames + 20)]
+    assert outs[-1].state == "LOST" and outs[-1].position is None
+
+
+def test_rf2b_slow_but_moving_ball_is_not_a_decoy() -> None:
+    tr = BallTracker()
+    outs = [tr.update(det(300.0 + 2.0 * f, 400.0)) for f in range(CFG.static_frames + 20)]
+    assert outs[-1].state == "TRACKED"
