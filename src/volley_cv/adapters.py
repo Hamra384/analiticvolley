@@ -71,9 +71,15 @@ class YoloBallDetector:
     """Pelota (SPEC-005 RF-1): pasada COCO del detector de personas, o pesos propios de 1 clase."""
 
     def __init__(
-        self, weights: Path | None = None, imgsz: int = 1280, conf: float = 0.05, model: Any | None = None
+        self,
+        weights: Path | None = None,
+        imgsz: int = 1280,
+        conf: float = 0.05,
+        model: Any | None = None,
+        classes: list[int] | None = None,  # None = modelo propio de 1 clase; [32] = COCO
     ) -> None:
         self._shared: YoloPersonDetector | None = None
+        self.classes = classes
         if model is None and weights is not None:
             from ultralytics import YOLO
 
@@ -90,7 +96,9 @@ class YoloBallDetector:
         if self._shared is not None:
             return self._shared.balls(frame)
         assert self.model is not None
-        r = self.model.predict(frame, imgsz=self.imgsz, conf=self.conf, verbose=False)[0]
+        r = self.model.predict(frame, classes=self.classes, imgsz=self.imgsz, conf=self.conf, verbose=False)[
+            0
+        ]
         b = r.boxes
         xyxy = np.asarray(b.xyxy.cpu().numpy(), dtype=np.float32).reshape(-1, 4)
         return _centers(xyxy, np.asarray(b.conf.cpu().numpy(), dtype=np.float32).reshape(-1))

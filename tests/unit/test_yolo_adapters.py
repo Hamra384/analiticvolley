@@ -56,3 +56,11 @@ def test_ball_detector_runs_its_own_model_when_frame_is_new() -> None:
     ball = YoloBallDetector.from_person_detector(people)
     ball.detect(np.zeros((10, 10, 3), dtype=np.uint8))  # sin pasada previa de personas para este frame
     assert model.calls == 1
+
+
+def test_own_ball_model_returns_centers() -> None:
+    model = FakeYolo()
+    ball = YoloBallDetector(model=model, conf=0.05)
+    out = ball.detect(np.zeros((10, 10, 3), dtype=np.uint8))
+    assert model.calls == 1 and out.shape == (3, 5)  # el modelo propio no filtra clases
+    np.testing.assert_allclose(out[1], [108, 108, 16, 16, 0.3])
