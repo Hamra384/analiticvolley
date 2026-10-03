@@ -177,6 +177,13 @@ def test_cli_end_to_end_with_fake_models(tmp_path: Path, monkeypatch: object) ->
     mp.setenv("VOLLEY_DATA_DIR", str(tmp_path))  # type: ignore[attr-defined]
     mp.setattr(adapters, "YoloPersonDetector", lambda weights, **kw: FakeDetector())  # type: ignore[attr-defined]
     mp.setattr(adapters, "ByteTrackTracker", lambda frame_rate=30: FakeTracker())  # type: ignore[attr-defined]
+
+    class FakeBall:
+        def detect(self, frame: np.ndarray) -> np.ndarray:
+            return np.array([[320.0, 100.0, 10.0, 10.0, 0.8]], dtype=np.float32)
+
+    # SPEC-005: la pelota sale de la misma pasada del detector de personas
+    mp.setattr(adapters.YoloBallDetector, "from_person_detector", classmethod(lambda cls, p: FakeBall()))  # type: ignore[attr-defined]
     import volley_cv.appearance as appearance
 
     mp.setattr(appearance, "ColorHistEmbedder", FakeEmbedder)  # type: ignore[attr-defined]
@@ -198,6 +205,7 @@ def test_cli_end_to_end_with_fake_models(tmp_path: Path, monkeypatch: object) ->
     lines = (out / "frames.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == 30
     assert (out / "debug.mp4").is_file()
+    assert json.loads(lines[-1])["ball"]["state"] == "TRACKED"
 
 
 def test_ac6_reset_called_at_cut_and_identities_recovered(tmp_path: Path) -> None:

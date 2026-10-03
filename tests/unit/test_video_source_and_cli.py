@@ -71,3 +71,20 @@ def test_video_config_missing_and_repo_configs_valid() -> None:
     for vid in ("jpn_arg_2026", "jpn_kor_2026"):
         cfg = load_video_config(vid)
         assert set(cfg.teams) == {"A", "B"}
+
+
+def test_cli_missing_ball_weights_is_a_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # SPEC-005 (manejo de errores): pesos propios que no existen -> error claro, no se cae a COCO en silencio
+    monkeypatch.setenv("VOLLEY_DATA_DIR", str(tmp_path))
+    assert main(["run", "--clip", "A2", "--ball-weights", "models/ball.pt"]) == 2
+    assert "pesos de pelota" in capsys.readouterr().err
+
+
+def test_cli_ball_weights_must_be_relative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("VOLLEY_DATA_DIR", str(tmp_path))
+    assert main(["run", "--clip", "A2", "--ball-weights", "../ball.pt"]) == 2
+    assert "--ball-weights" in capsys.readouterr().err

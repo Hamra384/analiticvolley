@@ -25,6 +25,9 @@ def short_id(player_id: str) -> str:
     return f"{parts[1]}{parts[3]}" if len(parts) == 4 else player_id
 
 
+BALL_COLOR = (0, 255, 255)  # amarillo (BGR)
+
+
 @dataclass(frozen=True)
 class DebugOptions:
     boxes: bool = True
@@ -74,9 +77,18 @@ class DebugRenderer:
                 ty = max(y1 - 6, th + 2)
                 cv2.rectangle(img, (x1, ty - th - 4), (x1 + tw + 4, ty + 3), (0, 0, 0), -1)
                 cv2.putText(img, label, (x1 + 2, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
+        b = out.ball
+        if b is not None and b.position is not None:
+            # SPEC-005 RF-6: detectada = círculo lleno; predicha = solo contorno (nunca parece detectada)
+            c = (round(b.position[0]), round(b.position[1]))
+            filled = b.state in ("DETECTED", "TRACKED", "REACQUIRED")
+            cv2.circle(img, c, 9, BALL_COLOR, -1 if filled else 2, cv2.LINE_AA)
+            cv2.circle(img, c, 13, (0, 0, 0), 1, cv2.LINE_AA)
         if o.hud:
             hud = f"frame {out.frame}  jugadores {len(out.players)}" + ("  CORTE" if cut else "")
-            cv2.rectangle(img, (0, 0), (360, 28), (0, 0, 0), -1)
+            if b is not None:
+                hud += f"  pelota {b.state}"
+            cv2.rectangle(img, (0, 0), (520, 28), (0, 0, 0), -1)
             cv2.putText(img, hud, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
         return img
 

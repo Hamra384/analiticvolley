@@ -30,3 +30,9 @@ class Embedder(Protocol):
     def embed(self, frame: NDArray[np.uint8], boxes: Sequence[Box]) -> list[NDArray[np.float32] | None]:
         """Un descriptor de apariencia por caja (None si el recorte es vacío)."""
         ...
+
+
+class BallDetector(Protocol):
+    def detect(self, frame: NDArray[np.uint8]) -> NDArray[np.float32]:
+        """Candidatos de pelota: array (N, 5) con cx, cy, ancho, alto, confianza (SPEC-005 RF-1)."""
+        ...
