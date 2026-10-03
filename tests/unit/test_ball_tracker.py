@@ -130,3 +130,51 @@ def test_rf2b_slow_but_moving_ball_is_not_a_decoy() -> None:
     tr = BallTracker()
     outs = [tr.update(det(300.0 + 2.0 * f, 400.0)) for f in range(CFG.static_frames + 20)]
     assert outs[-1].state == "TRACKED"
+
+
+# ── revisión independiente S5b ──────────────────────────────────────────────
+
+
+def _lose(tr: BallTracker, gap: int) -> None:
+    for f in range(15):
+        tr.update(det(*parabola(f)))
+    for _ in range(gap):
+        tr.update(NONE)
+
+
+def test_review_m1_low_confidence_far_candidate_after_lost_is_not_reacquired() -> None:
+    tr = BallTracker()
+    _lose(tr, 30)
+    out = tr.update(det(1090.0, 385.0, conf=0.06))
+    assert out.state == "LOST" and out.position is None
+
+
+def test_review_m1_confident_far_detection_after_lost_starts_a_new_track() -> None:
+    tr = BallTracker()
+    _lose(tr, CFG.max_predict + 3)
+    first = tr.update(NONE).track_id
+    out = tr.update(det(1700.0, 150.0, conf=0.9))
+    assert out.state == "DETECTED" and out.track_id != first
+
+
+def test_review_m1_lost_prediction_does_not_drift_forever() -> None:
+    tr = BallTracker()
+    _lose(tr, 200)
+    x, y = parabola(14)
+    out = tr.update(det(x + 30, y - 20, conf=0.9))  # vuelve cerca de donde se perdió
+    assert out.state in ("REACQUIRED", "DETECTED")
+    assert out.position is not None and abs(out.position[0] - (x + 30)) < D
+
+
+def test_review_m2_slow_moving_ball_is_not_a_decoy() -> None:
+    tr = BallTracker()
+    # 0,1 diámetros por frame: recorre 4,5 diámetros en 45 frames (no está quieta)
+    outs = [tr.update(det(300.0 + 0.1 * D * f, 400.0)) for f in range(CFG.static_frames + 30)]
+    assert all(o.state in ("DETECTED", "TRACKED") for o in outs)
+
+
+def test_review_b3_two_candidates_on_the_same_spot_count_once() -> None:
+    tr = BallTracker()
+    pair = np.array([[100.0, 100.0, D, D, 0.9], [101.0, 101.0, D, D, 0.5]], dtype=np.float32)
+    outs = [tr.update(pair) for _ in range(CFG.static_frames - 5)]
+    assert outs[-1].state == "TRACKED"  # todavía no es señuelo

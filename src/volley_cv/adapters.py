@@ -41,22 +41,28 @@ class YoloPersonDetector:
             model = YOLO(str(weights))
         self.model = model
         self.imgsz, self.conf, self.ball_conf = imgsz, conf, ball_conf
-        self._last: tuple[int, NDArray[np.float32]] | None = None  # (id del frame, pelotas de esa pasada)
+        self._last: tuple[NDArray[np.uint8], NDArray[np.float32]] | None = (
+            None  # (frame, pelotas de esa pasada)
+        )
+        self.with_ball = False  # se activa al compartir la pasada con YoloBallDetector (revisión S5b B8)
 
     def detect(self, frame: NDArray[np.uint8]) -> NDArray[np.float32]:
         people, balls = self._run(frame)
-        self._last = (id(frame), balls)
+        self._last = (frame, balls) if self.with_ball else None
         return people
 
     def balls(self, frame: NDArray[np.uint8]) -> NDArray[np.float32]:
-        if self._last is not None and self._last[0] == id(frame):
+        # revisión S5b B5: se compara el objeto (no su id(), que puede reutilizarse tras liberar el frame)
+        if self._last is not None and self._last[0] is frame:
             return self._last[1]
-        return self._run(frame)[1]
+        return self._run(frame, ball=True)[1]
 
-    def _run(self, frame: NDArray[np.uint8]) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
-        r = self.model.predict(
-            frame, classes=[0, 32], imgsz=self.imgsz, conf=min(self.conf, self.ball_conf), verbose=False
-        )[0]
+    def _run(
+        self, frame: NDArray[np.uint8], ball: bool = False
+    ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+        ball = ball or self.with_ball
+        classes, min_conf = ([0, 32], min(self.conf, self.ball_conf)) if ball else ([0], self.conf)
+        r = self.model.predict(frame, classes=classes, imgsz=self.imgsz, conf=min_conf, verbose=False)[0]
         b = r.boxes
         xyxy = np.asarray(b.xyxy.cpu().numpy(), dtype=np.float32).reshape(-1, 4)
         conf = np.asarray(b.conf.cpu().numpy(), dtype=np.float32).reshape(-1)
@@ -90,6 +96,7 @@ class YoloBallDetector:
     def from_person_detector(cls, people: YoloPersonDetector) -> YoloBallDetector:
         out = cls()
         out._shared = people
+        people.with_ball = True
         return out
 
     def detect(self, frame: NDArray[np.uint8]) -> NDArray[np.float32]:

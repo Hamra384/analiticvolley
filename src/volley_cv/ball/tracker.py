@@ -40,6 +40,8 @@ class BallTrackerConfig:
     static_frames: int = 45  # 1,5 s a 30 FPS
     static_radius_px: float = 6.0
     static_forget: int = 15  # frames sin verla para olvidar el señuelo
+    reacquire_frames: int = 60  # tras LOST, REACQUIRED solo dentro de este plazo (después es un track nuevo)
+    max_candidates: int = 10  # los de mayor confianza (costo acotado, RNF-1)
 
 
 @dataclass(frozen=True)
@@ -78,13 +80,23 @@ class BallTracker:
         cands = self._drop_decoys(np.asarray(candidates, dtype=np.float64).reshape(-1, 5))
         if self._x is None:
             return self._start(cands)
-        self._predict()
+        if self._lost:
+            # revisión S5b M1: en LOST la posición queda congelada (no se extrapola sin evidencia), el radio
+            # no crece y solo una detección confiable dentro del plazo es REACQUIRED; si no, track nuevo
+            self._missed += 1
+            if self._missed - cfg.max_predict > cfg.reacquire_frames:
+                return self._start(cands)
+            cands = cands[cands[:, 4] >= cfg.start_conf] if len(cands) else cands
+            radius = min(cfg.gate_px + cfg.gate_growth_px * cfg.max_predict, cfg.gate_max_px)
+        else:
+            self._predict()
+            radius = min(
+                (cfg.gate_init_px if self._hits < cfg.init_frames else cfg.gate_px)
+                + cfg.gate_growth_px * self._missed,
+                cfg.gate_max_px,
+            )
+        assert self._x is not None
         pred = self._x[:2]
-        radius = min(
-            (cfg.gate_init_px if self._hits < cfg.init_frames else cfg.gate_px)
-            + cfg.gate_growth_px * self._missed,
-            cfg.gate_max_px,
-        )
         best = None
         if len(cands):
             d = np.hypot(cands[:, 0] - pred[0], cands[:, 1] - pred[1])
@@ -97,7 +109,8 @@ class BallTracker:
             self._missed, self._lost, self._conf = 0, False, float(best[4])
             self._hits += 1
             return self._out(state)
-        self._missed += 1
+        if not self._lost:
+            self._missed += 1
         if self._missed <= cfg.max_predict and not self._lost:
             return BallState(
                 self._id,
@@ -105,7 +118,9 @@ class BallTracker:
                 self._conf * cfg.conf_decay**self._missed,
                 "PREDICTED",
             )
-        self._lost = True
+        if not self._lost:
+            self._lost = True
+            self._x[2:] = 0.0  # se congela la última predicción
         # LOST: una detección incompatible pero confiable empieza un track nuevo
         fresh = cands[cands[:, 4] >= cfg.start_conf] if len(cands) else cands
         if len(fresh):
@@ -114,20 +129,25 @@ class BallTracker:
 
     # ── internos ──────────────────────────────────────────────────────────────────
     def _drop_decoys(self, cands: NDArray[np.float64]) -> NDArray[np.float64]:
-        """RF-2b: actualiza los lugares donde hay una detección quieta y descarta las que ya son señuelos."""
+        """RF-2b: actualiza los lugares donde hay una detección quieta y descarta las que ya son señuelos.
+
+        El lugar es un ancla fija (la primera posición): una pelota que se mueve, aunque sea lento, sale del
+        radio y no se marca (revisión S5b M2). Cada lugar suma a lo sumo una vez por frame (B3).
+        """
         cfg = self.config
         self._frame += 1
+        if len(cands) > cfg.max_candidates:  # B4: costo acotado
+            cands = cands[np.argsort(-cands[:, 4])[: cfg.max_candidates]]
         keep = []
         for c in cands:
             r = max(cfg.static_radius_px, 0.6 * float(c[2]))  # tolera el temblor de una pelota en la mano
             spot = next((s for s in self._spots if np.hypot(c[0] - s[0], c[1] - s[1]) <= r), None)
             if spot is None:
-                spot = [float(c[0]), float(c[1]), 0.0, float(self._frame)]
+                spot = [float(c[0]), float(c[1]), 0.0, float(self._frame - 1)]
                 self._spots.append(spot)
-            if spot[3] >= self._frame - 1:
-                spot[2] += 1  # vista de nuevo en el mismo lugar
-                spot[0], spot[1] = 0.8 * spot[0] + 0.2 * float(c[0]), 0.8 * spot[1] + 0.2 * float(c[1])
-            spot[3] = float(self._frame)
+            if spot[3] < self._frame:
+                spot[2] += 1
+                spot[3] = float(self._frame)
             keep.append(spot[2] < cfg.static_frames)
         self._spots = [s for s in self._spots if s[3] >= self._frame - cfg.static_forget]
         return cands[np.array(keep, dtype=bool)] if len(cands) else cands

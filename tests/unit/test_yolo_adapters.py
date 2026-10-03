@@ -33,6 +33,7 @@ class FakeYolo:
 
     def predict(self, frame: np.ndarray, **kw: Any) -> list[Any]:
         self.calls += 1
+        self.classes = kw.get("classes")
         rows = [(10, 10, 50, 150, 0.9, 0), (100, 100, 116, 116, 0.3, 32), (5, 5, 20, 40, 0.1, 0)]
         r = type("R", (), {"boxes": _Boxes(rows)})()
         return [r]
@@ -64,3 +65,18 @@ def test_own_ball_model_returns_centers() -> None:
     out = ball.detect(np.zeros((10, 10, 3), dtype=np.uint8))
     assert model.calls == 1 and out.shape == (3, 5)  # el modelo propio no filtra clases
     np.testing.assert_allclose(out[1], [108, 108, 16, 16, 0.3])
+
+
+def test_review_b5_cache_is_by_frame_object_not_id() -> None:
+    model = FakeYolo()
+    people = YoloPersonDetector(model=model)
+    ball = YoloBallDetector.from_person_detector(people)
+    people.detect(np.zeros((10, 10, 3), dtype=np.uint8))
+    ball.detect(np.ones((10, 10, 3), dtype=np.uint8))  # otro frame (aunque reutilice la id): corre el modelo
+    assert model.calls == 2
+
+
+def test_review_b8_people_only_pass_does_not_ask_for_the_ball_class() -> None:
+    model = FakeYolo()
+    YoloPersonDetector(model=model).detect(np.zeros((10, 10, 3), dtype=np.uint8))
+    assert model.classes == [0]

@@ -91,7 +91,10 @@ def main(argv: list[str]) -> int:
     durations = {}
     for vid, v in catalog.videos.items():
         cap = cv2.VideoCapture(str(data / v.file))
-        durations[vid] = cap.get(cv2.CAP_PROP_FRAME_COUNT) / cap.get(cv2.CAP_PROP_FPS)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            raise SystemExit(f"{v.file}: FPS inválido")
+        durations[vid] = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
         cap.release()
     wins = training_windows(catalog, durations)
     root = data / "datasets" / "ball_v1"

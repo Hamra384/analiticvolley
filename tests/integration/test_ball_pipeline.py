@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from volley_cv.court import CourtMask
 from volley_cv.pipeline import Pipeline
@@ -61,3 +62,50 @@ def test_without_ball_detector_ball_is_null(tmp_path: Path) -> None:
     pipe.run(((i, make_frame(i)) for i in range(5)), tmp_path, write_video=False)
     rows = [json.loads(x) for x in (tmp_path / "frames.jsonl").read_text(encoding="utf-8").splitlines()]
     assert all(r["ball"] is None for r in rows)
+
+
+def test_cli_default_uses_own_ball_weights(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Camino por defecto de la CLI: detector de pelota propio (`models/ball_v1.pt`), no la pasada COCO."""
+    import cv2
+
+    import volley_cv.adapters as adapters
+    import volley_cv.appearance as appearance
+    from volley_cv.__main__ import main
+
+    from .test_pipeline import H, W
+
+    (tmp_path / "videos").mkdir()
+    (tmp_path / "models").mkdir()
+    (tmp_path / "models" / "ball_v1.pt").write_bytes(b"x")
+    w = cv2.VideoWriter(str(tmp_path / "videos" / "s.avi"), cv2.VideoWriter.fourcc(*"MJPG"), 30.0, (W, H))
+    for i in range(30):
+        w.write(make_frame(i))
+    w.release()
+    loaded: list[Path] = []
+
+    class OwnBall(FakeBallDetector):
+        def __init__(self, weights: Path, **kw: object) -> None:
+            super().__init__()
+            loaded.append(weights)
+
+    monkeypatch.setenv("VOLLEY_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(adapters, "YoloPersonDetector", lambda weights, **kw: FakeDetector())
+    monkeypatch.setattr(adapters, "ByteTrackTracker", lambda frame_rate=30: FakeTracker())
+    monkeypatch.setattr(adapters, "YoloBallDetector", OwnBall)
+    monkeypatch.setattr(appearance, "ColorHistEmbedder", FakeEmbedder)
+    out = tmp_path / "out"
+    args = [
+        "run",
+        "--video",
+        "videos/s.avi",
+        "--video-config",
+        "jpn_arg_2026",
+        "--end",
+        "0:01",
+        "--out",
+        str(out),
+    ]
+    assert main([*args, "--no-video"]) == 0
+    assert loaded == [tmp_path / "models" / "ball_v1.pt"]
+    rows = [json.loads(x) for x in (out / "frames.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["ball"]["state"] == "DETECTED"

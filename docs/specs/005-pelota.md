@@ -26,6 +26,8 @@ necesaria, y aun con un buen detector va a haber frames sin detección (pelota t
   alcanzapelotas): una detección que permanece quieta (radio ≈ 0,6 diámetros) durante `static_frames` (1,5 s) es
   un señuelo y se ignora mientras siga quieta. Costo: la pelota en la mano del sacador antes del saque puede salir
   `LOST`.
+- RF-2c (revisión S5b M1): en `LOST` la última posición queda congelada (no se extrapola), el radio no crece y
+  solo una detección con conf ≥ `start_conf` dentro de `reacquire_frames` es `REACQUIRED`; después, track nuevo.
 - RF-3: estados por frame:
   - `DETECTED`: primera detección de un track nuevo.
   - `TRACKED`: detección asociada al track existente.
@@ -36,8 +38,9 @@ necesaria, y aun con un buen detector va a haber frames sin detección (pelota t
 - RF-5: corte de escena → el track se reinicia (`LOST` hasta una nueva detección, que es `DETECTED`).
 - RF-6: el pipeline agrega `ball` a cada `FrameOutput` y la dibuja en el video de debug (marca distinta para
   detectada y predicha).
-- RF-7: **detector específico.** Pseudo-etiquetas de YOLOv8m COCO (conf ≥ 0,25) enlazadas por el tracker; se
-  aceptan detecciones dentro de trayectorias de ≥ 5 frames y se interpolan huecos de ≤ 3 frames entre detecciones.
+- RF-7: **detector específico.** Pseudo-etiquetas de YOLOv8m COCO (candidatos con conf ≥ 0,1) enlazadas por el
+  tracker; se aceptan trayectorias con ≥ 5 detecciones y **alguna** con conf ≥ 0,25 (ancla; así entran también
+  las detecciones difíciles de la misma trayectoria, revisión S5b B6) y se interpolan huecos de ≤ 3 frames entre detecciones.
   Solo tramos a más de 60 s de cualquier clip de evaluación. Solo se usan como imágenes de entrenamiento los frames
   con etiqueta (un frame sin etiqueta puede tener pelota no detectada). Fine-tuning de YOLOv8 (1 clase,
   imgsz 1280).
