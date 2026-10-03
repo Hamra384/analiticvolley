@@ -24,6 +24,15 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--out", help="directorio de salida (default: <datos>/outputs/<clip>)")
     run.add_argument("--no-video", action="store_true", help="no escribir debug.mp4")
     run.add_argument("--no-jersey", action="store_true", help="no leer números de camiseta (SPEC-003)")
+    run.add_argument(
+        "--ball-weights",
+        default="models/ball_v1.pt",
+        help="pesos de pelota (1 clase), relativos al directorio de datos (SPEC-005: detector propio)",
+    )
+    run.add_argument(
+        "--ball-coco", action="store_true", help="pelota con YOLO COCO (clase 32) en vez del propio"
+    )
+    run.add_argument("--no-ball", action="store_true", help="no trackear la pelota (SPEC-005)")
     run.add_argument("--weights", default="yolov8m.pt", help="pesos YOLO relativos al directorio de datos")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -35,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
-    from volley_cv.adapters import ByteTrackTracker, YoloPersonDetector
+    from volley_cv.adapters import ByteTrackTracker, YoloBallDetector, YoloPersonDetector
     from volley_cv.appearance import ColorHistEmbedder
     from volley_cv.court import CourtMask
     from volley_cv.jersey_reader import EasyOcrJerseyReader
@@ -63,17 +72,29 @@ def _run(args: argparse.Namespace) -> int:
         if end <= start:
             raise ConfigError(f"el inicio ({args.start}) debe ser anterior al fin ({args.end})")
         name = f"{Path(args.video).stem}_{int(start)}_{int(end)}"
+    if not args.no_ball and not args.ball_coco:
+        _check_relative(args.ball_weights, "--ball-weights")
+        if not (data / args.ball_weights).is_file():  # SPEC-005: sin caer a COCO en silencio
+            raise ConfigError(f"no existen los pesos de pelota: {args.ball_weights}")
     vcfg = load_video_config(video_id)
     info = probe(path)
     out_dir = Path(args.out) if args.out else data / "outputs" / name
+    people = YoloPersonDetector(data / args.weights)
+    if args.no_ball:
+        ball = None
+    elif args.ball_coco:
+        ball = YoloBallDetector.from_person_detector(people)  # misma pasada de YOLO (SPEC-005 RF-1)
+    else:
+        ball = YoloBallDetector(data / args.ball_weights)
     pipe = Pipeline(
-        detector=YoloPersonDetector(data / args.weights),
+        detector=people,
         tracker=ByteTrackTracker(frame_rate=round(info.fps)),
         embedder=ColorHistEmbedder(),  # SPIKE-003: mejor que ResNet18 y OSNet en clips reales
         court=CourtMask(vcfg.court, vcfg.exclude_regions),
         teams=TeamClassifier(vcfg.teams, officials=vcfg.officials),
         play_margin=vcfg.play_margin,
         jersey_reader=None if args.no_jersey else EasyOcrJerseyReader(),  # SPIKE-004: conf >= 0,95
+        ball_detector=ball,
     )
     summary = pipe.run(read_frames(path, start, end), out_dir, fps=info.fps, write_video=not args.no_video)
     print(

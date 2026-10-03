@@ -71,3 +71,34 @@ def test_trails_accumulate_and_reset() -> None:
     r.reset()
     img = r.draw(blank, moved)
     assert not img[360, 130:150].any()
+
+
+def _ball_frame(state: str, pos: tuple[float, float] | None) -> FrameOutput:
+    from volley_cv.output.schema import BallOut
+
+    return FrameOutput(
+        frame=0,
+        players=[],
+        ball=BallOut(track_id="ball_1", position=pos, confidence=0.5, state=state),  # type: ignore[arg-type]
+    )
+
+
+def test_spec005_detected_ball_is_drawn_filled_and_predicted_hollow() -> None:
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
+    det = DebugRenderer(DebugOptions(hud=False)).draw(img, _ball_frame("DETECTED", (100.0, 100.0)))
+    pred = DebugRenderer(DebugOptions(hud=False)).draw(img, _ball_frame("PREDICTED", (100.0, 100.0)))
+    assert det[100, 100].any()  # relleno en el centro
+    assert not pred[100, 100].any() and pred.any()  # solo el contorno
+
+
+def test_spec005_lost_ball_draws_nothing() -> None:
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
+    out = DebugRenderer(DebugOptions(hud=False)).draw(img, _ball_frame("LOST", None))
+    assert not out.any()
+
+
+def test_spec005_hud_shows_ball_state() -> None:
+    img = np.zeros((200, 400, 3), dtype=np.uint8)
+    with_ball = DebugRenderer().draw(img, _ball_frame("PREDICTED", (300.0, 150.0)))
+    without = DebugRenderer().draw(img, FrameOutput(frame=0, players=[]))
+    assert (with_ball[:28] != without[:28]).any()

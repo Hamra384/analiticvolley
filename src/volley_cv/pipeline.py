@@ -14,11 +14,13 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
+from volley_cv.ball import BallTracker
 from volley_cv.court import CourtMask, feet_in
 from volley_cv.identity import IdentityManager, JerseyRead, Observation
 from volley_cv.jersey_reader import JerseyReader
 from volley_cv.merges import apply_merges
-from volley_cv.models import Embedder, PlayerDetector, Tracker
+from volley_cv.models import BallDetector, Embedder, PlayerDetector, Tracker
+from volley_cv.output.schema import BallOut
 from volley_cv.team import TeamClassifier
 from volley_cv.video.shots import ShotDetector
 from volley_cv.viz import DebugRenderer
@@ -52,7 +54,11 @@ class Pipeline:
         read_stride: int = 5,
         read_max_occlusion: float = 0.15,
         forget_iou: float = 0.3,
+        ball_detector: BallDetector | None = None,
+        ball_tracker: BallTracker | None = None,
     ) -> None:
+        self.ball_detector = ball_detector
+        self.ball_tracker = ball_tracker or BallTracker()
         self.play_margin = play_margin
         self.jersey_reader = jersey_reader
         self.read_min_height, self.read_stride = read_min_height, read_stride
@@ -93,7 +99,20 @@ class Pipeline:
                         self.renderer.reset()
                         self._last_read.clear()
                         self._track_number.clear()
+                        self.ball_tracker.reset()
                     out = self.manager.update(idx, self._observations(frame))
+                    if self.ball_detector is not None:
+                        b = self.ball_tracker.update(self.ball_detector.detect(frame))  # SPEC-005 RF-6
+                        out = out.model_copy(
+                            update={
+                                "ball": BallOut(
+                                    track_id=b.track_id,
+                                    position=b.position,
+                                    confidence=b.confidence,
+                                    state=b.state,
+                                )
+                            }
+                        )
                     f.write(out.model_dump_json() + "\n")
                     if video_path is not None:
                         if writer is None:
