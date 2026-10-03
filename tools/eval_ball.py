@@ -5,6 +5,7 @@ Mismo tracker de producción (BallTracker) para todos los detectores:
 - P2 plausibilidad: frames en los que el track usó un candidato / frames con al menos un candidato.
 - P3 saltos: pasos con posición detectada > 5 % del ancho del frame entre frames consecutivos.
 - P5 FPS: solo detección.
+- quieta: frames con la pelota detectada que se mueve < 3 px/frame en una ventana de 15 (señuelo, RF-2b).
 - P4 (precisión visual) es manual: se guarda una hoja con 12 recortes al azar por clip (marca en el centro).
 
 Uso: uv run --extra ml python -m tools.eval_ball --name coco            (YOLOv8m COCO, clase 32)
@@ -15,6 +16,7 @@ Salida: <datos>/cache/reports/ball_eval_<name>.json y ball_p4_<name>_<clip>.jpg
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import random
 import sys
@@ -84,6 +86,14 @@ def main(argv: list[str]) -> int:
             prev = st.position if seen else None
             positions.append(st.position if seen else None)
         seen_idx = [k for k, p in enumerate(positions) if p is not None]
+        static = 0
+        for k in seen_idx:
+            w = [p for p in positions[max(0, k - 7) : k + 8] if p is not None]
+            if (
+                len(w) >= 10
+                and np.mean([np.hypot(a[0] - b[0], a[1] - b[1]) for a, b in itertools.pairwise(w)]) < 3
+            ):
+                static += 1
         sample = sorted(rng.sample(seen_idx, min(12, len(seen_idx))))
         tiles = []
         for k, (_, frame) in enumerate(read_frames(catalog.video_path(clip, data), clip.start_s, clip.end_s)):
@@ -103,6 +113,7 @@ def main(argv: list[str]) -> int:
             "P1": round(used / max(n, 1), 3),
             "P2": round(used / max(with_cand, 1), 3),
             "P3": jumps,
+            "quieta": static,
             "P5_fps": round(n / max(t_det, 1e-9), 1),
             "states": {s: states.count(s) for s in sorted(set(states))},
         }
